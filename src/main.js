@@ -1,0 +1,331 @@
+const { app, BrowserWindow, ipcMain, dialog, Menu, screen } = require('electron');
+const path = require('path');
+const MPVPlayer = require('./mpv');
+const dlna = require('./dlna');
+const DlnaRenderer = require('./dlna-renderer');
+const WatchHistory = require('./watch-history');
+const Settings = require('./settings');
+
+// Impede que o app abra mais de uma vez ao mesmo tempo (rodar "electron ."
+// de novo sem fechar o anterior so foca a janela ja aberta, em vez de duplicar).
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  return;
+}
+
+// O compositor DirectComposition do Chromium normalmente cobre janelas nativas
+// filhas embutidas via SetParent/--wid, resultando em tela preta. Desativar a
+// aceleracao de hardware faz o Chromium compor via GDI e deixa o mpv aparecer.
+app.disableHardwareAcceleration();
+
+let mainWindow;
+let videoHost;
+let controlsOverlay;
+let player;
+let renderer;
+let lastVideoRect = null;
+let lastCursorPos = null;
+let cursorPollTimer = null;
+
+const watchHistory = new WatchHistory(path.join(app.getPath('userData'), 'watch-history.json'));
+const settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
+
+function getHwnd(win) {
+  // getNativeWindowHandle() retorna um Buffer com o HWND; no Windows os handles
+  // sempre cabem nos 32 bits baixos, mesmo em processos 64-bit.
+  return win.getNativeWindowHandle().readUInt32LE(0);
+}
+
+// --- Modos de ajuste de imagem (aspect-ratio / preencher tela) ---
+// video-aspect-override: forca o mpv a interpretar o video com essa proporcao.
+// panscan: 0 = sem cortar (pode sobrar borda preta), 1 = corta o excesso pra
+// preencher a janela inteira sem distorcer.
+const KNOWN_RATIOS = [
+  [16, 9],
+  [16, 10],
+  [4, 3],
+  [21, 9],
+  [3, 2],
+  [5, 4],
+  [1, 1],
+];
+
+function gcd(a, b) {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+function closestRatioLabel(width, height) {
+  const target = width / height;
+  let best = null;
+  let bestDiff = Infinity;
+  for (const [w, h] of KNOWN_RATIOS) {
+    const diff = Math.abs(target - w / h);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = [w, h];
+    }
+  }
+  if (best && bestDiff < 0.03) return `${best[0]}:${best[1]}`;
+  const d = gcd(Math.round(width), Math.round(height)) || 1;
+  return `${Math.round(width / d)}:${Math.round(height / d)}`;
+}
+
+function buildFitModes() {
+  const modes = [
+    { id: 'original', label: 'Automático (original)', aspect: '-1', panscan: 0 },
+    { id: 'fill', label: 'Preencher tela (cortar bordas)', aspect: '-1', panscan: 1 },
+  ];
+  try {
+    const { width, height } = screen.getPrimaryDisplay().size;
+    const ratioLabel = closestRatioLabel(width, height);
+    // So mostra o preset da tela se ele for diferente do 16:9 (senao seria
+    // um item duplicado sem utilidade, ja que 16:9 ja esta na lista abaixo).
+    if (ratioLabel !== '16:9') {
+      modes.push({ id: 'monitor', label: `Minha tela (${ratioLabel})`, aspect: ratioLabel, panscan: 0 });
+    }
+  } catch {
+    // sem informacao de tela disponivel, segue so com os presets fixos
+  }
+  modes.push(
+    { id: '16:9', label: '16:9', aspect: '16:9', panscan: 0 },
+    { id: '4:3', label: '4:3', aspect: '4:3', panscan: 0 },
+    { id: '21:9', label: '21:9 (cinema)', aspect: '21:9', panscan: 0 },
+    { id: '1:1', label: '1:1', aspect: '1:1', panscan: 0 }
+  );
+  return modes;
+}
+
+function createWindows() {
+  mainWindow = new BrowserWindow({
+    width: 1040,
+    height: 720,
+    minWidth: 760,
+    minHeight: 520,
+    backgroundColor: '#0f1115',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  videoHost = new BrowserWindow({
+    parent: mainWindow,
+    frame: false,
+    show: false,
+    skipTaskbar: true,
+    type: 'toolbar',
+    resizable: false,
+    focusable: false,
+    backgroundColor: '#000000',
+  });
+  videoHost.setMenuBarVisibility(false);
+  videoHost.loadURL('about:blank');
+
+  // Janela transparente sobreposta ao videoHost, so com os controles (HTML).
+  // Fica sempre totalmente interativa (nao alterna ignoreMouseEvents em tempo
+  // real): alternar isso a cada movimento do mouse e um recurso do Windows
+  // conhecido por travar a entrega de eventos depois de algumas trocas, o que
+  // deixava o overlay preso escondido sem responder a mais nada. Como o mpv
+  // roda com --osc=no e a janela dele e focusable:false, nao ha nenhuma
+  // interacao nativa do mpv que dependa de cliques atravessando o overlay.
+  controlsOverlay = new BrowserWindow({
+    parent: mainWindow,
+    frame: false,
+    show: false,
+    skipTaskbar: true,
+    type: 'toolbar',
+    resizable: false,
+    focusable: false,
+    transparent: true,
+    hasShadow: false,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  controlsOverlay.setMenuBarVisibility(false);
+  controlsOverlay.loadFile(path.join(__dirname, 'overlay.html'));
+
+  // So reagimos a 'move' aqui (a posicao muda mas o tamanho/layout do video nao).
+  // Em 'resize' o layout interno (flex) ainda nao recalculou, entao usar o retangulo
+  // antigo causava um "pulo" — o ResizeObserver do renderer.js manda o retangulo
+  // certo assim que o CSS reflow acontece, e da conta do resize sozinho.
+  mainWindow.on('move', updateVideoHostBounds);
+}
+
+function updateVideoHostBounds() {
+  if (!videoHost || videoHost.isDestroyed()) return;
+  if (!lastVideoRect || lastVideoRect.width <= 0 || lastVideoRect.height <= 0) {
+    if (videoHost.isVisible()) videoHost.hide();
+    if (controlsOverlay && !controlsOverlay.isDestroyed() && controlsOverlay.isVisible()) controlsOverlay.hide();
+    return;
+  }
+  const mb = mainWindow.getContentBounds();
+  const bounds = {
+    x: Math.round(mb.x + lastVideoRect.x),
+    y: Math.round(mb.y + lastVideoRect.y),
+    width: Math.round(lastVideoRect.width),
+    height: Math.round(lastVideoRect.height),
+  };
+  videoHost.setBounds(bounds);
+  if (!videoHost.isVisible()) videoHost.showInactive();
+
+  if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+    controlsOverlay.setBounds(bounds);
+    if (!controlsOverlay.isVisible()) controlsOverlay.showInactive();
+    // O overlay precisa ficar sempre acima do videoHost no z-order pra os
+    // controles realmente flutuarem sobre o video (nao atras dele).
+    controlsOverlay.moveTop();
+  }
+}
+
+// O cursor sobre o video passa pela janela nativa embutida, entao mousemove
+// do DOM nao detecta. Sondar a posicao global do mouse cobre esse caso pro
+// sistema de auto-esconder a barra de controle saber que ha atividade.
+function startCursorActivityPoll() {
+  if (cursorPollTimer) return;
+  cursorPollTimer = setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isFocused()) return;
+    const pos = screen.getCursorScreenPoint();
+    if (!lastCursorPos || pos.x !== lastCursorPos.x || pos.y !== lastCursorPos.y) {
+      lastCursorPos = pos;
+      broadcast('player:activity');
+    }
+  }, 300);
+}
+
+// O overlay de controles e a janela principal sao processos de renderer
+// separados; eventos do player precisam chegar nos dois.
+function broadcast(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+  if (controlsOverlay && !controlsOverlay.isDestroyed()) controlsOverlay.webContents.send(channel, payload);
+}
+
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.focus();
+});
+
+Menu.setApplicationMenu(null);
+app.whenReady().then(async () => {
+  createWindows();
+  startCursorActivityPoll();
+
+  const savedFitId = settings.get('videoFitMode');
+  const initialFitMode = buildFitModes().find((m) => m.id === savedFitId) || buildFitModes()[0];
+  player = new MPVPlayer(watchHistory, { embedHwnd: getHwnd(videoHost), fitMode: initialFitMode });
+  player.on('load', ({ target }) => {
+    broadcast('player:now-playing', { target });
+  });
+  player.on('status', (info) => {
+    broadcast('player:status', info);
+  });
+  player.on('tracks', (info) => {
+    broadcast('player:tracks', info);
+  });
+  renderer = new DlnaRenderer(player);
+  renderer.on('activity', (info) => {
+    mainWindow.webContents.send('cast:activity', info);
+  });
+
+  mainWindow.on('enter-full-screen', () => broadcast('player:fullscreen-changed', true));
+  mainWindow.on('leave-full-screen', () => broadcast('player:fullscreen-changed', false));
+
+  if (settings.get('autoStartRenderer')) {
+    try {
+      await renderer.start(settings.get('preferredInterface'));
+    } catch (err) {
+      console.error('Falha ao iniciar recepcao automaticamente:', err.message);
+    }
+  }
+});
+
+app.on('window-all-closed', () => {
+  player.quit();
+  renderer.stop().catch(() => {});
+  if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  player.quit();
+  renderer.stop().catch(() => {});
+});
+
+ipcMain.handle('pick-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'Videos', extensions: ['mp4', 'mkv', 'avi', 'mov', 'webm', 'flv', 'm4v', 'ts'] }],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('player:load', async (_evt, target) => {
+  await player.loadFile(target);
+  return true;
+});
+ipcMain.handle('player:play', () => player.play());
+ipcMain.handle('player:toggle-popout', async () => await player.togglePopoutMode());
+ipcMain.handle('player:toggle-live-mode', () => player.toggleLiveMode());
+ipcMain.handle('player:pause', () => player.pause());
+ipcMain.handle('player:toggle-play', async () => {
+  const paused = await player.getProperty('pause', false);
+  return paused ? player.play() : player.pause();
+});
+ipcMain.handle('player:seek', (_evt, secs) => player.seek(secs));
+ipcMain.handle('player:volume', (_evt, vol) => player.setVolume(vol));
+ipcMain.handle('player:stop', () => player.stop());
+ipcMain.handle('player:seek-absolute', (_evt, secs) => player.seekAbsolute(secs));
+ipcMain.handle('player:toggle-mute', () => player.toggleMute());
+ipcMain.handle('player:toggle-subtitles', () => player.toggleSubtitles());
+ipcMain.handle('player:cycle-subtitle-track', () => player.cycleSubtitleTrack());
+ipcMain.handle('player:set-video-track', (_evt, id) => player.setVideoTrack(id));
+ipcMain.handle('player:return-to-live-edge', () => player.returnToLiveEdge());
+ipcMain.handle('player:get-fit-modes', () => ({
+  modes: buildFitModes(),
+  current: player.fitMode.id,
+}));
+ipcMain.handle('player:set-fit-mode', async (_evt, id) => {
+  const mode = buildFitModes().find((m) => m.id === id) || buildFitModes()[0];
+  await player.applyFitMode(mode);
+  settings.set('videoFitMode', mode.id);
+  return mode.id;
+});
+ipcMain.handle('player:toggle-fullscreen', () => {
+  const next = !mainWindow.isFullScreen();
+  mainWindow.setFullScreen(next);
+  return next;
+});
+
+ipcMain.handle('dlna:discover', () => dlna.discoverServers());
+ipcMain.handle('dlna:browse', (_evt, server, objectId) => dlna.browse(server, objectId));
+
+ipcMain.handle('renderer:start', () => renderer.start(settings.get('preferredInterface')));
+ipcMain.handle('renderer:stop', () => renderer.stop());
+ipcMain.handle('renderer:status', () => renderer.getStatus());
+
+ipcMain.handle('settings:get', () => settings.getAll());
+ipcMain.handle('settings:set-auto-start', (_evt, value) => {
+  settings.set('autoStartRenderer', !!value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-interface', async (_evt, name) => {
+  settings.set('preferredInterface', name || null);
+  if (renderer.getStatus().active) {
+    await renderer.stop();
+    await renderer.start(settings.get('preferredInterface'));
+  }
+  return renderer.getStatus();
+});
+
+ipcMain.on('player:set-video-rect', (_evt, rect) => {
+  lastVideoRect = rect;
+  updateVideoHostBounds();
+});

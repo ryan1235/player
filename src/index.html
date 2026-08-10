@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Player</title>
+<link rel="stylesheet" href="theme.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+        </span>
+        <div class="brand-text">
+          <h1>Player</h1>
+          <p>Vídeo local &amp; DLNA</p>
+        </div>
+      </div>
+      <nav>
+        <button class="tab active" data-tab="local">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4h16v16H4V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 9.5 15 12l-5.5 2.5v-5Z" fill="currentColor"/></svg>
+          Arquivos locais
+        </button>
+        <button class="tab" data-tab="dlna">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 10a8 8 0 0 1 16 0M7 12.5a4.5 4.5 0 0 1 9 0M12 19a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          DLNA
+        </button>
+        <button class="tab" data-tab="cast">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M3 10V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14a6 6 0 0 1 6 6M3 17.5a2.5 2.5 0 0 1 2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.75" cy="20.25" r="1" fill="currentColor"/></svg>
+          Receber
+        </button>
+        <button class="tab" data-tab="player">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+          Player
+        </button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="tab-player" class="tab-content">
+        <div class="player-stage" id="player-stage">
+          <div id="video-host"></div>
+        </div>
+      </section>
+
+      <section id="tab-local" class="tab-content active">
+        <div class="empty-state">
+          <span class="empty-icon">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+          </span>
+          <h2>Reproduzir um arquivo</h2>
+          <p class="hint">É preciso ter o mpv instalado e no PATH.</p>
+          <button id="btn-pick" class="btn-primary">Abrir arquivo...</button>
+        </div>
+      </section>
+
+      <section id="tab-dlna" class="tab-content">
+        <div class="section-toolbar">
+          <button id="btn-discover" class="btn-secondary">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M11 19a8 8 0 1 1 5.6-2.3M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Procurar servidores
+          </button>
+          <div id="dlna-breadcrumb" class="breadcrumb"></div>
+        </div>
+        <ul id="dlna-list" class="item-list"></ul>
+      </section>
+
+      <section id="tab-cast" class="tab-content">
+        <div class="empty-state">
+          <span class="empty-icon">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path d="M3 10V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14a6 6 0 0 1 6 6M3 17.5a2.5 2.5 0 0 1 2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.75" cy="20.25" r="1" fill="currentColor"/></svg>
+          </span>
+          <h2>Aparecer como opção de Cast</h2>
+          <p class="hint">Ative para este PC aparecer como opção de "Cast"/"Play To"/"Transmitir para dispositivo" em apps do celular (BubbleUPnP, VLC mobile, players com DLNA).</p>
+          <button id="btn-cast-toggle" class="btn-primary">Ativar recepção</button>
+          <p id="cast-status" class="hint status-line"></p>
+
+          <div id="cast-activity-row" class="activity-row">
+            <span id="cast-activity-dot" class="activity-dot"></span>
+            <span id="cast-activity-text">Aguardando conexão...</span>
+          </div>
+
+          <div class="cast-options">
+            <label class="option-row">
+              <input type="checkbox" id="chk-auto-start" />
+              Iniciar recepção automaticamente ao abrir o app
+            </label>
+            <label class="option-row option-select">
+              Interface de rede
+              <select id="sel-interface"></select>
+            </label>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-status-bar">
+      <span id="status"></span>
+    </footer>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

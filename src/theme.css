@@ -1,0 +1,17 @@
+:root {
+  --bg: #0f1115;
+  --bg-elevated: #171a21;
+  --bg-hover: #1f232c;
+  --bg-pressed: #262b35;
+  --border: #262b35;
+  --text: #eef0f3;
+  --text-muted: #8b92a1;
+  --text-faint: #565d6b;
+  --accent: #5b7cfa;
+  --accent-hover: #4a67e0;
+  --accent-soft: rgba(91, 124, 250, 0.14);
+  --danger: #f2555c;
+  --success: #5fd68a;
+  --radius: 10px;
+  --radius-lg: 14px;
+}
