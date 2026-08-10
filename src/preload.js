@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, clipboard } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   pickFile: () => ipcRenderer.invoke('pick-file'),
@@ -20,19 +20,28 @@ contextBridge.exposeInMainWorld('api', {
   setVideoRect: (rect) => ipcRenderer.send('player:set-video-rect', rect),
   onNowPlaying: (cb) => ipcRenderer.on('player:now-playing', (_evt, info) => cb(info)),
   onCastActivity: (cb) => ipcRenderer.on('cast:activity', (_evt, info) => cb(info)),
+  onCastSource: (cb) => ipcRenderer.on('cast:source', (_evt, info) => cb(info)),
   seekAbsolute: (secs) => ipcRenderer.invoke('player:seek-absolute', secs),
   toggleMute: () => ipcRenderer.invoke('player:toggle-mute'),
   toggleSubtitles: () => ipcRenderer.invoke('player:toggle-subtitles'),
   cycleSubtitleTrack: () => ipcRenderer.invoke('player:cycle-subtitle-track'),
+  cycleAudioTrack: () => ipcRenderer.invoke('player:cycle-audio-track'),
+  screenshot: () => ipcRenderer.invoke('player:screenshot'),
   playerSetVideoTrack: (trackId) => ipcRenderer.invoke('player:set-video-track', trackId),
   playerReturnToLiveEdge: () => ipcRenderer.invoke('player:return-to-live-edge'),
   getFitModes: () => ipcRenderer.invoke('player:get-fit-modes'),
   setFitMode: (id) => ipcRenderer.invoke('player:set-fit-mode', id),
   toggleFullscreen: () => ipcRenderer.invoke('player:toggle-fullscreen'),
-  togglePopout: () => ipcRenderer.invoke('player:toggle-popout'),
   toggleLiveMode: () => ipcRenderer.invoke('player:toggle-live-mode'),
   onPlayerStatus: (cb) => ipcRenderer.on('player:status', (_evt, info) => cb(info)),
   onPlayerTracks: (cb) => ipcRenderer.on('player:tracks', (_evt, info) => cb(info)),
   onActivity: (cb) => ipcRenderer.on('player:activity', () => cb()),
   onFullscreenChanged: (cb) => ipcRenderer.on('player:fullscreen-changed', (_evt, v) => cb(v)),
+  setAudioTrack: (id) => ipcRenderer.invoke('player:set-audio-track', id),
+  setSubtitleTrack: (id) => ipcRenderer.invoke('player:set-subtitle-track', id),
+  setSpeed: (value) => ipcRenderer.invoke('player:set-speed', value),
+  getMediaInfo: () => ipcRenderer.invoke('player:get-media-info'),
+  toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggle-always-on-top'),
+  getAlwaysOnTop: () => ipcRenderer.invoke('window:get-always-on-top'),
+  copyText: (text) => clipboard.writeText(text),
 });

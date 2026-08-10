@@ -11,6 +11,7 @@ process.env.DEBUG = process.env.DEBUG ? `${process.env.DEBUG},node-ssdp:*` : 'no
 
 const { Server: SsdpServer } = require('node-ssdp');
 const { XMLParser } = require('fast-xml-parser');
+const logger = require('./services/logger');
 
 const AVTRANSPORT_TYPE = 'urn:schemas-upnp-org:service:AVTransport:1';
 const RENDERINGCONTROL_TYPE = 'urn:schemas-upnp-org:service:RenderingControl:1';
@@ -71,6 +72,50 @@ function parseTime(str) {
   while (parts.length < 3) parts.unshift(0);
   const [h, m, s] = parts;
   return h * 3600 + m * 60 + s;
+}
+
+// Extrai titulo e URL de legenda externa do DIDL-Lite que os apps de cast
+// (BubbleUPnP, VLC mobile, etc.) mandam junto com SetAVTransportURI. So um
+// parser best-effort: se o formato nao bater com nada conhecido, so ignora.
+function parseDidlMetadata(xml) {
+  const empty = { title: null, subtitleUrl: null };
+  if (!xml) return empty;
+  try {
+    const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: false, attributeNamePrefix: '@_' });
+    const parsed = parser.parse(xml);
+    const item = parsed?.['DIDL-Lite']?.item;
+    if (!item) return empty;
+
+    const rawTitle = item.title;
+    const title = typeof rawTitle === 'string' ? rawTitle : rawTitle?.['#text'] || null;
+
+    let subtitleUrl = null;
+    const resList = Array.isArray(item.res) ? item.res : item.res ? [item.res] : [];
+    for (const res of resList) {
+      if (!res || typeof res === 'string') continue;
+      // Convencao Samsung/BubbleUPnP: legenda como atributo sec:CaptionInfo(Ex) no proprio <res> do video.
+      const caption = res['@_CaptionInfoEx'] || res['@_CaptionInfo'];
+      if (caption) {
+        subtitleUrl = caption;
+        break;
+      }
+      // Convencao alternativa: um <res> separado so pra legenda, com mimetype de texto.
+      const protocolInfo = res['@_protocolInfo'] || '';
+      if (/text\/(srt|vtt|ssa|ass)|smi\b/i.test(protocolInfo) && res['#text']) {
+        subtitleUrl = res['#text'];
+        break;
+      }
+    }
+    if (!subtitleUrl) {
+      // Convencao com elemento proprio (nao atributo do res).
+      const captionEl = item.CaptionInfoEx || item.CaptionInfo;
+      if (captionEl) subtitleUrl = typeof captionEl === 'string' ? captionEl : captionEl['#text'] || null;
+    }
+
+    return { title: title || null, subtitleUrl: subtitleUrl || null };
+  } catch {
+    return empty;
+  }
 }
 
 function loadOrCreateUuid() {
@@ -271,6 +316,23 @@ class DlnaRenderer extends EventEmitter {
     this.ip = iface.address;
     this.interfaceName = iface.name;
     this.currentUri = '';
+    this.currentTitle = null;
+
+    // Se algo diferente do que a gente mandou tocar via DLNA comecar a
+    // rodar (ex.: usuario abriu um arquivo local pela aba "Arquivos locais"),
+    // o indicador de "recebendo de X" precisa sumir. Uma reconexao interna
+    // apos queda recarrega o MESMO target, entao nao aciona isso.
+    this.player.on('load', ({ target }) => {
+      if (target !== this.currentUri) {
+        this.currentUri = '';
+        this.currentTitle = null;
+        this._emitSource(null, null);
+      }
+    });
+  }
+
+  _emitSource(remote, title) {
+    this.emit('source', { remote: remote || null, title: title || null });
   }
 
   getStatus() {
@@ -422,7 +484,7 @@ class DlnaRenderer extends EventEmitter {
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const body = Buffer.concat(chunks).toString('utf8');
-        await this._handleControl(url, req.headers.soapaction || '', body, res, sendXml);
+        await this._handleControl(url, req.headers.soapaction || '', body, res, sendXml, req.socket.remoteAddress);
         return;
       }
 
@@ -437,11 +499,11 @@ class DlnaRenderer extends EventEmitter {
     }
   }
 
-  async _handleControl(url, soapActionHeader, body, res, sendXml) {
+  async _handleControl(url, soapActionHeader, body, res, sendXml, remote) {
     const actionMatch = /#([^"]+)"?$/.exec(soapActionHeader);
     const action = actionMatch ? actionMatch[1] : null;
     console.log(`[dlna-renderer] acao SOAP: ${action} em ${url}`);
-    this.emit('activity', { type: 'action', action });
+    this.emit('activity', { type: 'action', action, remote });
 
     const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: true });
     const parsed = parser.parse(body);
@@ -453,7 +515,7 @@ class DlnaRenderer extends EventEmitter {
 
     let out;
     try {
-      out = await this._runAction(serviceType, action, args);
+      out = await this._runAction(serviceType, action, args, remote);
     } catch (err) {
       console.log(`[dlna-renderer] acao ${action} falhou: ${err.message}`);
       sendXml(500, soapFault(501, err.message || 'Action Failed'));
@@ -468,18 +530,34 @@ class DlnaRenderer extends EventEmitter {
     sendXml(200, soapResponse(serviceType, action, out));
   }
 
-  async _runAction(serviceType, action, args) {
+  async _runAction(serviceType, action, args, remote) {
     const player = this.player;
 
     if (serviceType === AVTRANSPORT_TYPE) {
       switch (action) {
-        case 'SetAVTransportURI':
+        case 'SetAVTransportURI': {
           this.currentUri = args.CurrentURI || '';
+          const { title, subtitleUrl } = parseDidlMetadata(args.CurrentURIMetaData);
+          // Debug temporario: log completo do que o celular manda, pra
+          // entender o formato real (upnp:class, protocolInfo, duration
+          // etc.) antes de decidir o que o app deve ler/usar disso.
+          logger.network(`[cast-debug] SetAVTransportURI de ${remote}`);
+          logger.network(`[cast-debug] CurrentURI: ${this.currentUri}`);
+          logger.network(`[cast-debug] CurrentURIMetaData (DIDL-Lite bruto):\n${args.CurrentURIMetaData || '(vazio)'}`);
+          logger.network(`[cast-debug] Parseado -> title=${JSON.stringify(title)} subtitleUrl=${JSON.stringify(subtitleUrl)}`);
+          this.currentTitle = title;
+          this._emitSource(remote, title);
           // Dispara o carregamento do arquivo mas não bloqueia a resposta SOAP.
           // Se bloquearmos, o celular vai ficar esperando até 6 segundos (do _waitForDuration)
           // antes de poder enviar o comando de "Play".
-          player.loadFile(this.currentUri).catch((err) => console.error('[dlna] erro no loadFile', err));
+          player
+            .loadFile(this.currentUri)
+            .then(() => {
+              if (subtitleUrl) player.command(['sub-add', subtitleUrl, 'select']).catch(() => {});
+            })
+            .catch((err) => console.error('[dlna] erro no loadFile', err));
           return {};
+        }
         case 'Play':
           await player.play();
           return {};
@@ -489,6 +567,8 @@ class DlnaRenderer extends EventEmitter {
         case 'Stop':
           await player.stop();
           this.currentUri = '';
+          this.currentTitle = null;
+          this._emitSource(null, null);
           return {};
         case 'Seek': {
           const target = parseTime(args.Target || '0:00:00');

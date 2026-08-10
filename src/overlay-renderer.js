@@ -1,6 +1,7 @@
 const ovRoot = document.getElementById('ov-root');
 const nowPlayingTitle = document.getElementById('now-playing-title');
 const bufferingEl = document.getElementById('buffering-indicator');
+const castSourceEl = document.getElementById('ov-cast-source');
 
 const btnPlayPause = document.getElementById('btn-playpause');
 const iconPlay = document.getElementById('icon-play');
@@ -9,18 +10,10 @@ const btnMute = document.getElementById('btn-mute');
 const iconVolOn = document.getElementById('icon-vol-on');
 const iconVolOff = document.getElementById('icon-vol-off');
 const volumeEl = document.getElementById('volume');
-const btnSubtitles = document.getElementById('btn-subtitles');
 const qualityContainer = document.getElementById('ov-quality-container');
 const btnQuality = document.getElementById('ov-btn-quality');
 const qualityMenu = document.getElementById('ov-quality-menu');
 const dvrBtn = document.getElementById('ov-live-dvr-btn');
-const btnDebug = document.getElementById('ov-btn-debug');
-const debugWindow = document.getElementById('ov-debug-window');
-const dbgRatio = document.getElementById('dbg-ratio');
-const dbgTarget = document.getElementById('dbg-target');
-const dbgCurrent = document.getElementById('dbg-current');
-const dbgSpeed = document.getElementById('dbg-speed');
-const dbgHealth = document.getElementById('dbg-health');
 const btnFullscreen = document.getElementById('btn-fullscreen');
 const iconFsEnter = document.getElementById('icon-fs-enter');
 const iconFsExit = document.getElementById('icon-fs-exit');
@@ -33,6 +26,93 @@ const progressBuffered = document.getElementById('ov-progress-buffered');
 const progressPlayed = document.getElementById('ov-progress-played');
 const progressThumb = document.getElementById('ov-progress-thumb');
 const tooltipEl = document.getElementById('ov-tooltip');
+
+const qualityInfoEl = document.getElementById('ov-quality-info');
+
+const audioWrap = document.getElementById('ov-audio-wrap');
+const btnAudioMenu = document.getElementById('btn-audio-menu');
+const audioMenu = document.getElementById('ov-audio-menu');
+
+const subtitleWrap = document.getElementById('ov-subtitle-wrap');
+const btnSubtitleMenu = document.getElementById('btn-subtitle-menu');
+const subtitleMenu = document.getElementById('ov-subtitle-menu');
+
+const speedCluster = document.getElementById('ov-speed-cluster');
+const btnSpeed = document.getElementById('btn-speed');
+const speedMenu = document.getElementById('ov-speed-menu');
+
+const btnMore = document.getElementById('btn-more');
+const moreMenu = document.getElementById('ov-more-menu');
+
+const modalBackdrop = document.getElementById('ov-modal-backdrop');
+const modalTitleEl = document.getElementById('ov-modal-title');
+const modalBodyEl = document.getElementById('ov-modal-body');
+const modalCloseBtn = document.getElementById('ov-modal-close');
+
+// Nomes amigaveis pros codigos de idioma mais comuns que o mpv reporta
+// (ISO 639-1/639-2) — cai no codigo bruto em maiusculas se nao reconhecer.
+const LANG_NAMES = {
+  pt: 'Português', 'pt-br': 'Português', por: 'Português',
+  en: 'English', eng: 'English',
+  es: 'Español', spa: 'Español',
+  ja: '日本語', jpn: '日本語',
+  fr: 'Français', fra: 'Français', fre: 'Français',
+  de: 'Deutsch', deu: 'Deutsch', ger: 'Deutsch',
+  it: 'Italiano', ita: 'Italiano',
+  ru: 'Русский', rus: 'Русский',
+  ko: '한국어', kor: '한국어',
+  zh: '中文', chi: '中文', zho: '中文',
+};
+
+function trackLabel(t) {
+  if (t.title) return t.title;
+  if (t.lang) return LANG_NAMES[t.lang.toLowerCase()] || t.lang.toUpperCase();
+  return `Faixa ${t.id}`;
+}
+
+// --- Debug Overlay (Ctrl+Shift+D) ---
+const debugEl = document.getElementById('ov-debug');
+const dbg = {
+  state: document.getElementById('dbg-state'),
+  mode: document.getElementById('dbg-mode'),
+  buffer: document.getElementById('dbg-buffer'),
+  latency: document.getElementById('dbg-latency'),
+  target: document.getElementById('dbg-target'),
+  health: document.getElementById('dbg-health'),
+  speed: document.getElementById('dbg-speed'),
+  fps: document.getElementById('dbg-fps'),
+  dropped: document.getElementById('dbg-dropped'),
+  bitrate: document.getElementById('dbg-bitrate'),
+  download: document.getElementById('dbg-download'),
+  dvr: document.getElementById('dbg-dvr'),
+  healing: document.getElementById('dbg-healing'),
+  reconnects: document.getElementById('dbg-reconnects'),
+};
+let debugVisible = false;
+
+function renderDebug(info) {
+  if (!debugVisible || !info) return;
+  const state = info.state || {};
+  dbg.state.textContent = state.status || '—';
+  dbg.mode.textContent = state.mode || (info.isLive ? 'LIVE' : 'VOD');
+  dbg.buffer.textContent = typeof info.cacheAmount === 'number' ? `${info.cacheAmount.toFixed(2)}s` : '—';
+  dbg.latency.textContent = typeof info.liveDelay === 'number' ? `${info.liveDelay.toFixed(2)}s` : '—';
+  dbg.target.textContent = typeof info.targetLiveDelay === 'number' ? `${info.targetLiveDelay.toFixed(1)}s` : '—';
+  dbg.health.textContent = info.liveHealth || '—';
+  dbg.speed.textContent = typeof info.currentSpeed === 'number' ? info.currentSpeed.toFixed(2) + 'x' : '—';
+  dbg.fps.textContent = info.fps ? info.fps.toFixed(2) : '—';
+  dbg.dropped.textContent = info.droppedFrames ?? '—';
+  dbg.bitrate.textContent = info.bitrate ? `${(info.bitrate / 1e6).toFixed(2)} Mbps` : '—';
+  dbg.download.textContent = info.downloadSpeed ? `${(info.downloadSpeed / 1e6).toFixed(2)} MB/s` : '—';
+  dbg.dvr.textContent = info.dvrMode ? 'ON' : 'OFF';
+  dbg.healing.textContent = state.isRecovering ? 'RECUPERANDO' : state.isReconnecting ? 'RECONECTANDO' : 'PRONTO';
+  dbg.reconnects.textContent = info.reconnectAttempt ? `${info.reconnectAttempt}/${info.reconnectMax}` : '0';
+}
+
+function toggleDebugOverlay() {
+  debugVisible = !debugVisible;
+  debugEl.hidden = !debugVisible;
+}
 
 const withErr = (fn) => (...args) => fn(...args).catch((err) => console.error(err));
 
@@ -61,52 +141,74 @@ btnMute.addEventListener('click', withErr(() => window.api.toggleMute()));
 volumeEl.addEventListener('input', (e) => {
   window.api.setVolume(Number(e.target.value)).catch(() => {});
 });
-btnSubtitles.addEventListener('click', withErr(() => window.api.toggleSubtitles()));
-document.getElementById('btn-subtitle-track').addEventListener('click', withErr(() => window.api.cycleSubtitleTrack()));
-const btnPopout = document.getElementById('btn-popout');
-btnPopout.addEventListener('click', async () => {
-  btnPopout.classList.toggle('active');
-  const isPopout = await window.api.togglePopout();
-  showTooltip(isPopout ? 'Modo Discord (Pop-out) Ativado' : 'Modo Integrado Ativado');
-  if (isPopout) btnPopout.style.color = 'var(--accent)';
-  else btnPopout.style.color = '';
+
+document.getElementById('btn-screenshot').addEventListener('click', async () => {
+  try {
+    await window.api.screenshot();
+    showToast('Captura salva');
+  } catch {
+    showToast('Erro ao capturar tela');
+  }
 });
 
 btnFullscreen.addEventListener('click', () => {
   window.api.toggleFullscreen().catch(() => {});
 });
-// --- Menu de Qualidade ---
-let qualityOpen = false;
-let currentTracks = [];
-btnQuality.addEventListener('click', () => {
-  qualityOpen = !qualityOpen;
-  qualityMenu.classList.toggle('open', qualityOpen);
-  if (qualityOpen) fitMenuOpen = false;
-  fitMenu.classList.remove('open');
-});
+// --- Sistema generico de menus dropdown (Qualidade/Proporção/Áudio/
+// Legenda/Velocidade/Mais) — abrir um fecha os outros, clique fora fecha,
+// Escape fecha. Substitui o padrao antigo onde cada menu tinha sua propria
+// variavel *Open e logica de abrir/fechar repetida.
+const dropdownMenus = new Map(); // id -> { button, menu, onBeforeOpen }
+let openDropdownId = null;
+
+function registerDropdown(id, button, menu, onBeforeOpen) {
+  dropdownMenus.set(id, { button, menu, onBeforeOpen });
+  button.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (openDropdownId === id) {
+      closeDropdowns();
+      return;
+    }
+    if (onBeforeOpen) onBeforeOpen();
+    openDropdown(id);
+  });
+}
+
+function openDropdown(id) {
+  closeDropdowns();
+  const entry = dropdownMenus.get(id);
+  if (!entry) return;
+  entry.menu.classList.add('open');
+  entry.button.setAttribute('aria-expanded', 'true');
+  openDropdownId = id;
+}
+
+function closeDropdowns() {
+  if (!openDropdownId) return;
+  const entry = dropdownMenus.get(openDropdownId);
+  if (entry) {
+    entry.menu.classList.remove('open');
+    entry.button.setAttribute('aria-expanded', 'false');
+  }
+  openDropdownId = null;
+}
+
+document.addEventListener('click', () => closeDropdowns());
 
 dvrBtn.addEventListener('click', () => {
   window.api.playerReturnToLiveEdge();
 });
 
-let debugOpen = false;
-btnDebug.addEventListener('click', () => {
-  debugOpen = !debugOpen;
-  debugWindow.style.display = debugOpen ? 'block' : 'none';
-});
+// --- Menu de Qualidade (video) ---
+let currentTracks = [];
+function renderQualityMenuItems() { renderQualityMenu(); }
+registerDropdown('quality', btnQuality, qualityMenu, renderQualityMenuItems);
 
-const btnToggleLive = document.getElementById('ov-btn-toggle-live');
-btnToggleLive.addEventListener('click', () => {
-  window.api.toggleLiveMode();
-});
-
-// --- Menu de proporção / ajuste de imagem (evita ficar "adivinhando" clicando
-// varias vezes num botao de ciclar: mostra as opcoes com a atual marcada) ---
+// --- Menu de proporção / ajuste de imagem ---
 const btnAspect = document.getElementById('btn-aspect');
 const fitMenu = document.getElementById('ov-fit-menu');
 let fitModes = [];
 let currentFitId = 'original';
-let fitMenuOpen = false;
 
 function renderFitMenu() {
   fitMenu.innerHTML = '';
@@ -122,32 +224,245 @@ function renderFitMenu() {
       currentFitId = mode.id;
       window.api.setFitMode(mode.id).catch(() => {});
       renderFitMenu();
-      closeFitMenu();
+      closeDropdowns();
     });
     fitMenu.appendChild(item);
   });
 }
+registerDropdown('fit', btnAspect, fitMenu);
 
-function openFitMenu() {
-  fitMenuOpen = true;
-  fitMenu.classList.add('open');
-  btnAspect.setAttribute('aria-expanded', 'true');
-}
-
-function closeFitMenu() {
-  fitMenuOpen = false;
-  fitMenu.classList.remove('open');
-  btnAspect.setAttribute('aria-expanded', 'false');
-}
-
-btnAspect.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (fitMenuOpen) closeFitMenu();
-  else openFitMenu();
+window.api.getFitModes().then(({ modes, current }) => {
+  fitModes = modes;
+  currentFitId = current;
+  renderFitMenu();
 });
-document.addEventListener('click', () => { if (fitMenuOpen) closeFitMenu(); });
+
+// --- Menu de Áudio (contextual: só aparece com 2+ faixas) ---
+let audioTracks = [];
+function renderAudioMenu() {
+  audioMenu.innerHTML = '';
+  audioTracks.forEach((t) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ov-menu-item' + (t.selected ? ' active' : '');
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', t.selected ? 'true' : 'false');
+    item.innerHTML = `<span>${trackLabel(t)}</span><span class="ov-menu-check">✓</span>`;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.api.setAudioTrack(t.id).catch(() => {});
+      closeDropdowns();
+    });
+    audioMenu.appendChild(item);
+  });
+}
+registerDropdown('audio', btnAudioMenu, audioMenu, renderAudioMenu);
+
+// --- Menu de Legendas (contextual: só aparece se houver alguma faixa) ---
+let subtitleTracks = [];
+let lastSubVisible = false;
+function renderSubtitleMenu() {
+  subtitleMenu.innerHTML = '';
+  const anySelected = subtitleTracks.some((t) => t.selected) && lastSubVisible;
+
+  const offItem = document.createElement('button');
+  offItem.type = 'button';
+  offItem.className = 'ov-menu-item' + (!anySelected ? ' active' : '');
+  offItem.setAttribute('role', 'menuitemradio');
+  offItem.setAttribute('aria-checked', !anySelected ? 'true' : 'false');
+  offItem.innerHTML = '<span>Desativadas</span><span class="ov-menu-check">✓</span>';
+  offItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.api.setSubtitleTrack('off').catch(() => {});
+    closeDropdowns();
+  });
+  subtitleMenu.appendChild(offItem);
+
+  subtitleTracks.forEach((t) => {
+    const active = anySelected && t.selected;
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ov-menu-item' + (active ? ' active' : '');
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', active ? 'true' : 'false');
+    item.innerHTML = `<span>${trackLabel(t)}</span><span class="ov-menu-check">✓</span>`;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.api.setSubtitleTrack(t.id).catch(() => {});
+      closeDropdowns();
+    });
+    subtitleMenu.appendChild(item);
+  });
+}
+registerDropdown('subtitle', btnSubtitleMenu, subtitleMenu, renderSubtitleMenu);
+
+// --- Menu de Velocidade (contextual: oculto em live — o "cérebro" de
+// latência já controla speed automaticamente nesse caso) ---
+const SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+let lastSpeed = 1.0;
+function renderSpeedMenu() {
+  speedMenu.innerHTML = '';
+  SPEED_OPTIONS.forEach((v) => {
+    const active = Math.abs(v - lastSpeed) < 0.01;
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ov-menu-item' + (active ? ' active' : '');
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', active ? 'true' : 'false');
+    item.innerHTML = `<span>${v}x</span><span class="ov-menu-check">✓</span>`;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.api.setSpeed(v).catch(() => {});
+      closeDropdowns();
+    });
+    speedMenu.appendChild(item);
+  });
+}
+registerDropdown('speed', btnSpeed, speedMenu, renderSpeedMenu);
+
+// --- Menu "Mais" (ações secundárias) ---
+let alwaysOnTop = false;
+let currentTargetUrl = null;
+
+function renderMoreMenu() {
+  moreMenu.innerHTML = '';
+  const items = [
+    { label: 'Forçar modo VOD/Live', onClick: () => window.api.toggleLiveMode() },
+    { label: 'Informações', onClick: () => openInfoModal() },
+    { label: 'Estatísticas', onClick: () => openStatsModal() },
+    {
+      label: 'Sempre no topo',
+      state: alwaysOnTop ? 'ON' : 'OFF',
+      onClick: async () => {
+        alwaysOnTop = await window.api.toggleAlwaysOnTop();
+      },
+    },
+    {
+      label: 'Copiar URL',
+      onClick: () => {
+        if (!currentTargetUrl) return;
+        window.api.copyText(currentTargetUrl);
+        showToast('URL copiada');
+      },
+    },
+  ];
+  items.forEach((it) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'ov-menu-item';
+    item.innerHTML = `<span>${it.label}</span>${it.state ? `<span class="ov-menu-item-state">${it.state}</span>` : ''}`;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      it.onClick();
+      closeDropdowns();
+    });
+    moreMenu.appendChild(item);
+  });
+}
+registerDropdown('more', btnMore, moreMenu, renderMoreMenu);
+
+window.api.getAlwaysOnTop().then((v) => { alwaysOnTop = v; }).catch(() => {});
+
+// --- Modal genérico (Informações / Estatísticas) ---
+let modalOpen = false;
+let statsModalOpen = false;
+
+function openModal(title) {
+  closeDropdowns();
+  modalTitleEl.textContent = title;
+  modalOpen = true;
+  modalBackdrop.hidden = false;
+  // requestAnimationFrame garante que o browser aplique o estado inicial
+  // (hidden removido) antes de disparar a transicao de entrada.
+  requestAnimationFrame(() => modalBackdrop.classList.add('open'));
+}
+
+function closeModal() {
+  modalOpen = false;
+  statsModalOpen = false;
+  modalBackdrop.classList.remove('open');
+  setTimeout(() => { if (!modalOpen) modalBackdrop.hidden = true; }, 160);
+}
+
+modalCloseBtn.addEventListener('click', closeModal);
+modalBackdrop.addEventListener('click', (e) => {
+  if (e.target === modalBackdrop) closeModal();
+});
+
+async function openInfoModal() {
+  openModal('INFORMAÇÕES');
+  modalBodyEl.innerHTML = '<div class="ov-info-row"><span>Carregando…</span></div>';
+  try {
+    const info = await window.api.getMediaInfo();
+    const rows = [];
+    if (currentTargetUrl) rows.push(['Arquivo', currentTargetUrl]);
+    if (info.video && info.video.width && info.video.height) {
+      rows.push(['Resolução', `${info.video.width} × ${info.video.height}`]);
+    }
+    if (info.video && info.video.fps) rows.push(['FPS', Number(info.video.fps).toFixed(2)]);
+    if (info.video && info.video.format) rows.push(['Codec de vídeo', String(info.video.format).toUpperCase()]);
+    if (info.video && info.video.bitrate) rows.push(['Bitrate de vídeo', `${(info.video.bitrate / 1e6).toFixed(2)} Mbps`]);
+    if (info.video && info.video.hwdec && info.video.hwdec !== 'no') rows.push(['Decodificação', info.video.hwdec]);
+    if (info.audio && info.audio.codec) rows.push(['Codec de áudio', String(info.audio.codec).toUpperCase()]);
+    if (info.audio && info.audio.channels) rows.push(['Canais de áudio', String(info.audio.channels)]);
+    if (info.audio && info.audio.bitrate) rows.push(['Bitrate de áudio', `${Math.round(info.audio.bitrate / 1000)} kbps`]);
+    rows.push(['Tipo', lastStatusInfo && lastStatusInfo.isLive ? 'AO VIVO' : 'VOD']);
+    if (lastStatusInfo && lastStatusInfo.isLive && typeof lastStatusInfo.liveDelay === 'number') {
+      rows.push(['Latência', `${lastStatusInfo.liveDelay.toFixed(1)}s`]);
+    }
+    modalBodyEl.innerHTML = rows.length
+      ? rows.map(([k, v]) => `<div class="ov-info-row"><span>${k}</span><span>${v}</span></div>`).join('')
+      : '<div class="ov-info-row"><span>Sem dados disponíveis.</span></div>';
+  } catch (err) {
+    modalBodyEl.innerHTML = '<div class="ov-info-row"><span>Erro ao carregar informações.</span></div>';
+  }
+}
+
+function renderStatsBody() {
+  const info = lastStatusInfo || {};
+  const state = info.state || {};
+  const rows = [
+    ['Estado', state.status || '—'],
+    ['Buffer', typeof info.cacheAmount === 'number' ? `${info.cacheAmount.toFixed(2)}s` : '—'],
+    ['Latência', typeof info.liveDelay === 'number' ? `${info.liveDelay.toFixed(2)}s` : '—'],
+    ['Download', info.downloadSpeed ? `${(info.downloadSpeed / 1e6).toFixed(2)} MB/s` : '—'],
+    ['Bitrate', info.bitrate ? `${(info.bitrate / 1e6).toFixed(2)} Mbps` : '—'],
+    ['FPS', info.fps ? info.fps.toFixed(2) : '—'],
+    ['Frames perdidos', info.droppedFrames ?? '—'],
+    ['Reconexões', info.reconnectAttempt ? `${info.reconnectAttempt}/${info.reconnectMax}` : '0'],
+  ];
+  modalBodyEl.innerHTML = rows.map(([k, v]) => `<div class="ov-stat-row"><span>${k}</span><span>${v}</span></div>`).join('');
+}
+
+function openStatsModal() {
+  openModal('ESTATÍSTICAS');
+  statsModalOpen = true;
+  renderStatsBody();
+}
+
+function updateQualityInfo(info) {
+  if (!info || info.idle || !info.videoWidth || !info.videoHeight) {
+    qualityInfoEl.hidden = true;
+    return;
+  }
+  const parts = [`${info.videoWidth}×${info.videoHeight}`];
+  if (info.fps) parts.push(`${Math.round(info.fps)}fps`);
+  if (info.bitrate) parts.push(`${(info.bitrate / 1e6).toFixed(1)} Mbps`);
+  qualityInfoEl.textContent = parts.join(' · ');
+  qualityInfoEl.hidden = false;
+}
+
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && fitMenuOpen) closeFitMenu();
+  if (e.ctrlKey && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+    e.preventDefault();
+    toggleDebugOverlay();
+    return;
+  }
+  if (e.key === 'Escape') {
+    if (modalOpen) closeModal();
+    else if (openDropdownId) closeDropdowns();
+    return;
+  }
   if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.altKey && !e.metaKey) {
     if (fitModes && fitModes.length > 0) {
       const currentIndex = fitModes.findIndex(m => m.id === currentFitId);
@@ -156,16 +471,10 @@ document.addEventListener('keydown', (e) => {
       window.api.setFitMode(nextMode.id).then(id => {
         currentFitId = id;
         renderFitMenu();
-        showTooltip(`Proporção: ${nextMode.label}`);
+        showToast(`Proporção: ${nextMode.label}`);
       });
     }
   }
-});
-
-window.api.getFitModes().then(({ modes, current }) => {
-  fitModes = modes;
-  currentFitId = current;
-  renderFitMenu();
 });
 
 window.api.onFullscreenChanged((isFullscreen) => {
@@ -196,6 +505,18 @@ function showTooltip(pct, clientX) {
 
 function hideTooltip() {
   tooltipEl.classList.remove('visible');
+}
+
+// Toast generico de status (ex.: "Proporção: 16:9", "Captura salva") —
+// diferente do tooltip de tempo da barra de progresso: aparece centralizado
+// e some sozinho depois de um tempo, em vez de seguir o mouse.
+let toastTimer = null;
+function showToast(message, duration = 1600) {
+  tooltipEl.textContent = message;
+  tooltipEl.style.left = '50%';
+  tooltipEl.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => tooltipEl.classList.remove('visible'), duration);
 }
 
 progressHit.addEventListener('pointermove', (e) => {
@@ -238,7 +559,31 @@ progressHit.addEventListener('pointerup', endScrub);
 progressHit.addEventListener('pointercancel', endScrub);
 
 // --- Estado vindo do processo principal ---
+// Titulo "bonito" que o celular manda via DIDL-Lite ao castear (ver
+// cast:source abaixo) — quando existe, tem prioridade sobre o nome de
+// arquivo bruto extraido da URL. Os dois eventos disparam em sequencia
+// sincrona pro mesmo load (source sempre antes de now-playing), entao
+// isso nunca fica "grudado" de um video pro seguinte.
+let pendingCastTitle = null;
+
+window.api.onCastSource(({ remote, title } = {}) => {
+  pendingCastTitle = title || null;
+  if (!remote) {
+    castSourceEl.hidden = true;
+    return;
+  }
+  castSourceEl.hidden = false;
+  castSourceEl.textContent = `Recebendo de ${remote}`;
+});
+
 window.api.onNowPlaying(({ target }) => {
+  currentTargetUrl = target || null;
+  if (pendingCastTitle) {
+    nowPlayingTitle.textContent = pendingCastTitle;
+    nowPlayingTitle.title = target;
+    pendingCastTitle = null;
+    return;
+  }
   let title = target;
   try {
     const url = new URL(target);
@@ -252,12 +597,41 @@ window.api.onNowPlaying(({ target }) => {
   nowPlayingTitle.title = target;
 });
 
+let lastStatusInfo = null;
+
 window.api.onPlayerStatus((info) => {
+  lastStatusInfo = info;
+  renderDebug(info);
+  updateQualityInfo(info);
+  if (statsModalOpen) renderStatsBody();
+
+  speedCluster.hidden = !!info.isLive;
+  if (!info.isLive && typeof info.currentSpeed === 'number') {
+    lastSpeed = info.currentSpeed;
+    btnSpeed.textContent = `${Math.round(lastSpeed * 100) / 100}x`;
+    if (openDropdownId === 'speed') renderSpeedMenu();
+  }
+
   if (info.idle) {
-    bufferingEl.hidden = true;
+    if (info.connectionLost) {
+      bufferingEl.hidden = false;
+      bufferingEl.textContent = 'Conexão perdida';
+      bufferingEl.className = 'ov-buffering ov-buffering-lost';
+    } else {
+      bufferingEl.hidden = true;
+    }
     return;
   }
-  bufferingEl.hidden = !info.buffering;
+
+  if (info.reconnecting) {
+    bufferingEl.hidden = false;
+    bufferingEl.textContent = `Reconectando… (${info.reconnectAttempt}/${info.reconnectMax})`;
+    bufferingEl.className = 'ov-buffering ov-buffering-warn';
+  } else {
+    bufferingEl.hidden = !info.buffering;
+    bufferingEl.textContent = 'Carregando…';
+    bufferingEl.className = 'ov-buffering';
+  }
 
   duration = info.duration || 0;
   if (info.isLive) {
@@ -280,21 +654,10 @@ window.api.onPlayerStatus((info) => {
     const statsEl = document.getElementById('ov-live-stats');
     statsEl.textContent = `(Buffer: ${cacheStr})`;
     statsEl.className = `ov-live-stats ${info.liveHealth || 'good'}`;
-
-    // Atualiza Painel DNSO
-    if (debugOpen) {
-      dbgRatio.textContent = typeof info.cacheAmount === 'number' ? info.cacheAmount.toFixed(1) + 's' : '--';
-      dbgTarget.textContent = info.targetLiveDelay ? info.targetLiveDelay.toFixed(1) + 's' : '--';
-      dbgCurrent.textContent = info.liveDelay ? info.liveDelay.toFixed(1) + 's' : '--';
-      dbgSpeed.textContent = info.currentSpeed ? info.currentSpeed.toFixed(2) + 'x' : '1.00x';
-      dbgHealth.textContent = info.liveHealth || '--';
-      dbgHealth.style.color = info.liveHealth === 'danger' ? '#f87171' : info.liveHealth === 'warning' ? '#facc15' : '#4ade80';
-    }
   } else {
     ovRoot.classList.remove('ov-live');
     ovRoot.classList.remove('ov-dvr');
     dvrBtn.classList.add('ov-hidden');
-    debugWindow.style.display = 'none';
   }
 
   if (!scrubbing) {
@@ -305,7 +668,7 @@ window.api.onPlayerStatus((info) => {
   const bufferedPct = duration ? Math.min(100, (info.cacheTime / duration) * 100) : 0;
   progressBuffered.style.width = bufferedPct + '%';
   timeDurationEl.textContent = formatClock(duration);
-  btnSubtitles.classList.toggle('ov-btn-active', !!info.subVisible);
+  lastSubVisible = !!info.subVisible;
 
   const wasPaused = lastPaused;
   lastPaused = !!info.paused;
@@ -342,7 +705,7 @@ function armIdleTimer() {
   showControls();
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
-    if (!lastPaused && !fitMenuOpen) ovRoot.classList.add('idle');
+    if (!lastPaused && !openDropdownId && !modalOpen) ovRoot.classList.add('idle');
   }, 3000);
 }
 
@@ -388,14 +751,26 @@ ovRoot.addEventListener(
 );
 
 window.api.onPlayerTracks((tracksInfo) => {
-  if (!tracksInfo || !tracksInfo.video || tracksInfo.video.length <= 1) {
+  if (!tracksInfo) return;
+
+  if (!tracksInfo.video || tracksInfo.video.length <= 1) {
     qualityContainer.style.display = 'none';
     currentTracks = [];
-    return;
+  } else {
+    qualityContainer.style.display = 'block';
+    currentTracks = tracksInfo.video;
+    renderQualityMenu();
   }
-  qualityContainer.style.display = 'block';
-  currentTracks = tracksInfo.video;
-  renderQualityMenu();
+
+  audioTracks = tracksInfo.audio || [];
+  const audioHidden = audioTracks.length <= 1;
+  audioWrap.hidden = audioHidden;
+  if (!audioHidden) renderAudioMenu();
+
+  subtitleTracks = tracksInfo.sub || [];
+  const subtitleHidden = subtitleTracks.length === 0;
+  subtitleWrap.hidden = subtitleHidden;
+  if (!subtitleHidden) renderSubtitleMenu();
 });
 
 function renderQualityMenu() {
@@ -406,8 +781,7 @@ function renderQualityMenu() {
   if (!currentTracks.some(t => t.selected)) autoEl.classList.add('active');
   autoEl.addEventListener('click', () => {
     window.api.playerSetVideoTrack('auto');
-    qualityOpen = false;
-    qualityMenu.classList.remove('open');
+    closeDropdowns();
   });
   qualityMenu.appendChild(autoEl);
 
@@ -422,8 +796,7 @@ function renderQualityMenu() {
     
     el.addEventListener('click', () => {
       window.api.playerSetVideoTrack(t.id);
-      qualityOpen = false;
-      qualityMenu.classList.remove('open');
+      closeDropdowns();
     });
     qualityMenu.appendChild(el);
   });

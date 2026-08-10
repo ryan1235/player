@@ -1,7 +1,7 @@
 {
   "name": "aura-player",
   "version": "1.0.0",
-  "description": "Aura Player - Um Player de Vídeo e Live HLS elegante e ultra-rápido.",
+  "description": "Aura Player - Um Player de Vï¿½deo e Live HLS elegante e ultra-rï¿½pido.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -10,6 +10,7 @@
   "dependencies": {
     "electron-is-dev": "^3.0.1",
     "fast-xml-parser": "^4.3.6",
+    "koffi": "^3.1.4",
     "node-ssdp": "^4.0.1"
   },
   "devDependencies": {
@@ -34,22 +35,28 @@
     "asar": true,
     "asarUnpack": [
       "bin/**/*",
-      "mpv-config/**/*"
+      "mpv-config/**/*",
+      "node_modules/koffi/**/*"
     ],
     "extraFiles": [
       {
         "from": "bin",
         "to": "bin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "mpv-config",
         "to": "mpv-config",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
   "allowScripts": {
-    "electron@31.7.7": true
+    "electron@31.7.7": true,
+    "koffi@3.1.4": true
   }
 }

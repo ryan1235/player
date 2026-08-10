@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const MPVPlayer = require('./mpv');
 const dlna = require('./dlna');
 const DlnaRenderer = require('./dlna-renderer');
@@ -20,7 +21,6 @@ if (!gotSingleInstanceLock) {
 app.disableHardwareAcceleration();
 
 let mainWindow;
-let videoHost;
 let controlsOverlay;
 let player;
 let renderer;
@@ -31,10 +31,11 @@ let cursorPollTimer = null;
 const watchHistory = new WatchHistory(path.join(app.getPath('userData'), 'watch-history.json'));
 const settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
 
-function getHwnd(win) {
-  // getNativeWindowHandle() retorna um Buffer com o HWND; no Windows os handles
-  // sempre cabem nos 32 bits baixos, mesmo em processos 64-bit.
-  return win.getNativeWindowHandle().readUInt32LE(0);
+function getHwndBuffer(win) {
+  // Buffer bruto do handle nativo da janela — usado tanto pro --wid do mpv
+  // quanto pra descobrir depois, via API do Windows, o hwnd que ele criou ao
+  // ser embutido (ver src/native-embed.js e mpv.js).
+  return win.getNativeWindowHandle();
 }
 
 // --- Modos de ajuste de imagem (aspect-ratio / preencher tela) ---
@@ -112,20 +113,7 @@ function createWindows() {
   });
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
-  videoHost = new BrowserWindow({
-    parent: mainWindow,
-    frame: false,
-    show: false,
-    skipTaskbar: true,
-    type: 'toolbar',
-    resizable: false,
-    focusable: false,
-    backgroundColor: '#000000',
-  });
-  videoHost.setMenuBarVisibility(false);
-  videoHost.loadURL('about:blank');
-
-  // Janela transparente sobreposta ao videoHost, so com os controles (HTML).
+  // Janela transparente sobreposta a area de video, so com os controles (HTML).
   // Fica sempre totalmente interativa (nao alterna ignoreMouseEvents em tempo
   // real): alternar isso a cada movimento do mouse e um recurso do Windows
   // conhecido por travar a entrega de eventos depois de algumas trocas, o que
@@ -156,32 +144,49 @@ function createWindows() {
   // Em 'resize' o layout interno (flex) ainda nao recalculou, entao usar o retangulo
   // antigo causava um "pulo" — o ResizeObserver do renderer.js manda o retangulo
   // certo assim que o CSS reflow acontece, e da conta do resize sozinho.
-  mainWindow.on('move', updateVideoHostBounds);
+  mainWindow.on('move', updateEmbeddedVideoBounds);
 }
 
-function updateVideoHostBounds() {
-  if (!videoHost || videoHost.isDestroyed()) return;
+function updateEmbeddedVideoBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
   if (!lastVideoRect || lastVideoRect.width <= 0 || lastVideoRect.height <= 0) {
-    if (videoHost.isVisible()) videoHost.hide();
+    if (player) player.positionEmbedded(0, 0, 0, 0);
     if (controlsOverlay && !controlsOverlay.isDestroyed() && controlsOverlay.isVisible()) controlsOverlay.hide();
     return;
   }
-  const mb = mainWindow.getContentBounds();
-  const bounds = {
-    x: Math.round(mb.x + lastVideoRect.x),
-    y: Math.round(mb.y + lastVideoRect.y),
-    width: Math.round(lastVideoRect.width),
-    height: Math.round(lastVideoRect.height),
-  };
-  videoHost.setBounds(bounds);
-  if (!videoHost.isVisible()) videoHost.showInactive();
 
   if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+    const mb = mainWindow.getContentBounds();
+    const bounds = {
+      x: Math.round(mb.x + lastVideoRect.x),
+      y: Math.round(mb.y + lastVideoRect.y),
+      width: Math.round(lastVideoRect.width),
+      height: Math.round(lastVideoRect.height),
+    };
     controlsOverlay.setBounds(bounds);
     if (!controlsOverlay.isVisible()) controlsOverlay.showInactive();
-    // O overlay precisa ficar sempre acima do videoHost no z-order pra os
-    // controles realmente flutuarem sobre o video (nao atras dele).
+    // O overlay e uma janela irma (owned) de mainWindow, entao o Windows ja
+    // mantem ela acima da dona no z-order automaticamente — moveTop() aqui e
+    // so uma garantia extra, sem custo.
     controlsOverlay.moveTop();
+  }
+
+  if (player) {
+    // O video agora e uma janela filha NATIVA de mainWindow (nao mais uma
+    // BrowserWindow separada), entao a posicao e relativa ao proprio
+    // client-area de mainWindow (sem somar getContentBounds — isso so vale
+    // pra janelas irmas/top-level como o controlsOverlay acima). E como essa
+    // chamada usa a API do Windows diretamente (sem passar pelas conversoes
+    // do Electron), precisamos multiplicar pelo scaleFactor do monitor pra
+    // converter de pixels logicos (DIP) pra pixels fisicos.
+    const scale = screen.getDisplayMatching(mainWindow.getBounds()).scaleFactor || 1;
+    player.positionEmbedded(
+      Math.round(lastVideoRect.x * scale),
+      Math.round(lastVideoRect.y * scale),
+      Math.round(lastVideoRect.width * scale),
+      Math.round(lastVideoRect.height * scale)
+    );
   }
 }
 
@@ -220,7 +225,16 @@ app.whenReady().then(async () => {
 
   const savedFitId = settings.get('videoFitMode');
   const initialFitMode = buildFitModes().find((m) => m.id === savedFitId) || buildFitModes()[0];
-  player = new MPVPlayer(watchHistory, { embedHwnd: getHwnd(videoHost), fitMode: initialFitMode });
+
+  let screenshotDir = path.join(app.getPath('pictures'), 'Aura Player');
+  try {
+    fs.mkdirSync(screenshotDir, { recursive: true });
+  } catch (err) {
+    console.error('Nao foi possivel criar a pasta de capturas de tela:', err.message);
+    screenshotDir = null; // deixa o mpv usar o diretorio padrao dele mesmo
+  }
+
+  player = new MPVPlayer(watchHistory, { embedHwnd: getHwndBuffer(mainWindow), fitMode: initialFitMode, screenshotDir });
   player.on('load', ({ target }) => {
     broadcast('player:now-playing', { target });
   });
@@ -233,6 +247,9 @@ app.whenReady().then(async () => {
   renderer = new DlnaRenderer(player);
   renderer.on('activity', (info) => {
     mainWindow.webContents.send('cast:activity', info);
+  });
+  renderer.on('source', (info) => {
+    broadcast('cast:source', info);
   });
 
   mainWindow.on('enter-full-screen', () => broadcast('player:fullscreen-changed', true));
@@ -272,7 +289,6 @@ ipcMain.handle('player:load', async (_evt, target) => {
   return true;
 });
 ipcMain.handle('player:play', () => player.play());
-ipcMain.handle('player:toggle-popout', async () => await player.togglePopoutMode());
 ipcMain.handle('player:toggle-live-mode', () => player.toggleLiveMode());
 ipcMain.handle('player:pause', () => player.pause());
 ipcMain.handle('player:toggle-play', async () => {
@@ -286,6 +302,8 @@ ipcMain.handle('player:seek-absolute', (_evt, secs) => player.seekAbsolute(secs)
 ipcMain.handle('player:toggle-mute', () => player.toggleMute());
 ipcMain.handle('player:toggle-subtitles', () => player.toggleSubtitles());
 ipcMain.handle('player:cycle-subtitle-track', () => player.cycleSubtitleTrack());
+ipcMain.handle('player:cycle-audio-track', () => player.cycleAudioTrack());
+ipcMain.handle('player:screenshot', () => player.screenshot());
 ipcMain.handle('player:set-video-track', (_evt, id) => player.setVideoTrack(id));
 ipcMain.handle('player:return-to-live-edge', () => player.returnToLiveEdge());
 ipcMain.handle('player:get-fit-modes', () => ({
@@ -303,6 +321,18 @@ ipcMain.handle('player:toggle-fullscreen', () => {
   mainWindow.setFullScreen(next);
   return next;
 });
+
+ipcMain.handle('player:set-audio-track', (_evt, id) => player.setAudioTrack(id));
+ipcMain.handle('player:set-subtitle-track', (_evt, id) => player.setSubtitleTrack(id));
+ipcMain.handle('player:set-speed', (_evt, value) => player.setSpeed(value));
+ipcMain.handle('player:get-media-info', () => player.getMediaInfo());
+
+ipcMain.handle('window:toggle-always-on-top', () => {
+  const next = !mainWindow.isAlwaysOnTop();
+  mainWindow.setAlwaysOnTop(next);
+  return next;
+});
+ipcMain.handle('window:get-always-on-top', () => mainWindow.isAlwaysOnTop());
 
 ipcMain.handle('dlna:discover', () => dlna.discoverServers());
 ipcMain.handle('dlna:browse', (_evt, server, objectId) => dlna.browse(server, objectId));
@@ -327,5 +357,5 @@ ipcMain.handle('settings:set-interface', async (_evt, name) => {
 
 ipcMain.on('player:set-video-rect', (_evt, rect) => {
   lastVideoRect = rect;
-  updateVideoHostBounds();
+  updateEmbeddedVideoBounds();
 });
