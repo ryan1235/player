@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, clipboard } = require('electron');
+const { contextBridge, ipcRenderer, clipboard, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   pickFile: () => ipcRenderer.invoke('pick-file'),
@@ -44,4 +44,50 @@ contextBridge.exposeInMainWorld('api', {
   toggleAlwaysOnTop: () => ipcRenderer.invoke('window:toggle-always-on-top'),
   getAlwaysOnTop: () => ipcRenderer.invoke('window:get-always-on-top'),
   copyText: (text) => clipboard.writeText(text),
+  // Somente leitura, usados pela tela "Sobre" em Configurações — nao chamam o main process.
+  getAppVersion: () => require('../package.json').version,
+  getElectronVersion: () => process.versions.electron,
+
+  // Historico
+  getHistory: () => ipcRenderer.invoke('history:list'),
+  removeHistoryItem: (target) => ipcRenderer.invoke('history:remove', target),
+
+  // Configurações adicionais
+  setDiscoveryTimeout: (ms) => ipcRenderer.invoke('settings:set-discovery-timeout', ms),
+  setDefaultVolume: (vol) => ipcRenderer.invoke('settings:set-default-volume', vol),
+  setAutoPlayNext: (value) => ipcRenderer.invoke('settings:set-auto-play-next', value),
+  setAutoReconnectCast: (value) => ipcRenderer.invoke('settings:set-auto-reconnect-cast', value),
+  getLaunchOnBoot: () => ipcRenderer.invoke('settings:get-launch-on-boot'),
+  setLaunchOnBoot: (value) => ipcRenderer.invoke('settings:set-launch-on-boot', value),
+  onCastStatusChanged: (cb) => ipcRenderer.on('cast:status-changed', (_evt, info) => cb(info)),
+
+  // Sistema de Live (Configuracoes > Ao Vivo)
+  setLiveBufferProfile: (profile) => ipcRenderer.invoke('settings:set-live-buffer-profile', profile),
+  setLiveCustomTarget: (secs) => ipcRenderer.invoke('settings:set-live-custom-target', secs),
+  setShowLiveQualityLabel: (value) => ipcRenderer.invoke('settings:set-show-live-quality-label', value),
+  onShowLiveQualityLabelChanged: (cb) => ipcRenderer.on('settings:show-live-quality-label-changed', (_evt, value) => cb(value)),
+  setShowLiveEventToasts: (value) => ipcRenderer.invoke('settings:set-show-live-event-toasts', value),
+  onShowLiveEventToastsChanged: (cb) => ipcRenderer.on('settings:show-live-event-toasts-changed', (_evt, value) => cb(value)),
+  onLiveEvent: (cb) => ipcRenderer.on('player:live-event', (_evt, info) => cb(info)),
+
+  // Escala da interface: so afeta a janela que chamar (renderer principal),
+  // nao passa pelo main process nem mexe na janela do overlay do player.
+  setUiScale: (factor) => webFrame.setZoomFactor(factor),
+  getUiScale: () => webFrame.getZoomFactor(),
+
+  // Logs (Configurações > Avançado)
+  getLogs: () => ipcRenderer.invoke('logs:get'),
+  getMpvInfo: () => ipcRenderer.invoke('system:get-mpv-info'),
+
+  // Biblioteca
+  getLibrary: () => ipcRenderer.invoke('library:get'),
+  pickLibraryFolder: () => ipcRenderer.invoke('library:pick-folder'),
+  scanLibrary: (folder) => ipcRenderer.invoke('library:scan', folder),
+  clearLibrary: () => ipcRenderer.invoke('library:clear'),
+  onLibraryScanProgress: (cb) => ipcRenderer.on('library:scan-progress', (_evt, info) => cb(info)),
+
+  // Atualizações
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  setCheckUpdatesAutomatically: (value) => ipcRenderer.invoke('settings:set-check-updates', value),
+  onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_evt, info) => cb(info)),
 });

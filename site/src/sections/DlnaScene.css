@@ -1,0 +1,30 @@
+.dlna-scene-section {
+  position: relative;
+}
+
+.dlna-scene-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.dlna-scene-copy { max-width: 460px; }
+
+.dlna-scene-canvas-wrap {
+  height: 540px;
+  border-radius: var(--radius-xl);
+  background: radial-gradient(80% 80% at 50% 40%, rgba(91, 124, 250, 0.08), transparent 70%), var(--bg-elevated);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+@media (max-width: 980px) {
+  .dlna-scene-grid { grid-template-columns: 1fr; }
+  .dlna-scene-copy { max-width: none; }
+  .dlna-scene-canvas-wrap { height: 380px; }
+}
+
+@media (max-width: 560px) {
+  .dlna-scene-canvas-wrap { height: 300px; }
+}

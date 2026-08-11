@@ -4,6 +4,17 @@ const DEFAULTS = {
   autoStartRenderer: false,
   preferredInterface: null,
   videoFitMode: 'original',
+  dlnaDiscoveryTimeout: 4000,
+  defaultVolume: 100,
+  autoPlayNext: false,
+  autoReconnectCast: false,
+  checkUpdatesAutomatically: false,
+  // Sistema de Live (Configuracoes > Ao Vivo) — ver src/live/buffer-manager.js.
+  // 'auto' e o padrao recomendado; os demais existem pra usuario avancado.
+  liveBufferProfile: 'auto',
+  liveCustomTargetSecs: 5,
+  showLiveQualityLabel: true,
+  showLiveEventToasts: true,
 };
 
 class Settings {

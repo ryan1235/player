@@ -1,17 +1,111 @@
-:root {
-  --bg: #0f1115;
+/* Sistema de tokens visuais: tema escuro (padrao) e claro via [data-theme].
+   Tudo que os componentes usam (cor, raio, sombra, espacamento) vem daqui —
+   nao usar valores soltos nos outros CSS. */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Superficies (do fundo pro topo da pilha) */
+  --bg: #0b0d12;
+  --bg-sidebar: #10131a;
   --bg-elevated: #171a21;
+  --bg-elevated-2: #1d212a;
   --bg-hover: #1f232c;
   --bg-pressed: #262b35;
+  --bg-input: #1a1d25;
+  --bg-modal: #191d25;
+
   --border: #262b35;
+  --border-strong: #333a47;
+
   --text: #eef0f3;
   --text-muted: #8b92a1;
   --text-faint: #565d6b;
+  --text-on-accent: #ffffff;
+
   --accent: #5b7cfa;
   --accent-hover: #4a67e0;
   --accent-soft: rgba(91, 124, 250, 0.14);
+  --accent-2: #8b6cf0;
+
   --danger: #f2555c;
+  --danger-soft: rgba(242, 85, 92, 0.14);
   --success: #5fd68a;
+  --success-soft: rgba(95, 214, 138, 0.14);
+  --warning: #f2a93b;
+  --warning-soft: rgba(242, 169, 59, 0.14);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f3f4f7;
+  --bg-sidebar: #fbfbfd;
+  --bg-elevated: #ffffff;
+  --bg-elevated-2: #f4f5f8;
+  --bg-hover: #eceef2;
+  --bg-pressed: #e2e5eb;
+  --bg-input: #ffffff;
+  --bg-modal: #ffffff;
+
+  --border: #e3e5ea;
+  --border-strong: #cdd1d9;
+
+  --text: #191c22;
+  --text-muted: #5c6270;
+  --text-faint: #9aa0ad;
+  --text-on-accent: #ffffff;
+
+  --accent: #4f6df2;
+  --accent-hover: #3d59db;
+  --accent-soft: rgba(79, 109, 242, 0.1);
+  --accent-2: #7b5cd6;
+
+  --danger: #e0454c;
+  --danger-soft: rgba(224, 69, 76, 0.1);
+  --success: #2fa864;
+  --success-soft: rgba(47, 168, 100, 0.12);
+  --warning: #b9790f;
+  --warning-soft: rgba(185, 121, 15, 0.12);
+
+  --shadow-sm: 0 1px 2px rgba(20, 22, 30, 0.06);
+  --shadow-md: 0 6px 18px rgba(20, 22, 30, 0.08);
+  --shadow-lg: 0 16px 36px rgba(20, 22, 30, 0.12);
+}
+
+:root {
+  /* Escala de raio */
+  --radius-sm: 6px;
   --radius: 10px;
   --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Escala de espacamento */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  --sidebar-w: 232px;
+  --sidebar-w-collapsed: 72px;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 0.12s var(--ease);
+  --transition: 0.18s var(--ease);
+}
+
+/* Desativa transicoes/animacoes quando o usuario ativa "Reduzir animacoes" */
+:root.reduce-motion,
+:root.reduce-motion * {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
 }

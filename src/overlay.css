@@ -672,3 +672,69 @@ button { font: inherit; }
   font-variant-numeric: tabular-nums;
 }
 
+/* --- Toasts do sistema de live (Configurações > Ao Vivo > Notificações) ---
+   Pilha no canto superior direito, abaixo da barra de titulo. Cada toast
+   entra deslizando + fade e some sozinho; a pilha nunca passa de
+   OV_LIVE_TOAST_MAX itens visiveis (ver overlay-renderer.js) pra nao
+   inundar a tela numa queda de conexao com varias tentativas seguidas. */
+.ov-live-toasts {
+  position: absolute;
+  top: 46px;
+  right: 14px;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  pointer-events: none;
+  max-width: min(280px, 60vw);
+}
+
+.ov-live-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: rgba(20, 21, 27, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translateX(16px) scale(0.97);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.ov-live-toast.ov-live-toast-in {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.ov-live-toast.ov-live-toast-out {
+  opacity: 0;
+  transform: translateX(16px) scale(0.97);
+}
+
+.ov-live-toast-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8a8f9c;
+}
+
+.ov-live-toast-speed-up .ov-live-toast-dot,
+.ov-live-toast-confidence .ov-live-toast-dot { background: #38bdf8; }
+.ov-live-toast-speed-normal .ov-live-toast-dot,
+.ov-live-toast-recovered .ov-live-toast-dot { background: #4ade80; }
+.ov-live-toast-warning .ov-live-toast-dot,
+.ov-live-toast-jump .ov-live-toast-dot,
+.ov-live-toast-reconnecting .ov-live-toast-dot { background: #facc15; }
+.ov-live-toast-stall .ov-live-toast-dot,
+.ov-live-toast-error .ov-live-toast-dot { background: #f87171; }
+

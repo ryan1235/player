@@ -23,7 +23,11 @@ Player de video simples em Electron, com navegacao de servidores DLNA/UPnP na re
 
 ## Pre-requisitos
 
-Precisa do **mpv** instalado e no PATH. Instale com:
+O app procura primeiro por um `mpv.exe` embutido em `bin/` (ver `src/mpv.js` > `resolveMpvBinary()`) — se ele existir ali, **nao precisa instalar mpv separadamente nem ter ele no PATH**, inclusive no instalador final gerado por `npm run dist` (o `mpv.exe` em `bin/` e empacotado junto, ver `build.extraFiles` no `package.json`).
+
+`bin/` nao e versionado no git (binario grande, ~120MB) — pra popular localmente, copie um `mpv.exe` estatico (ex.: build do [shinchiro/mpv-winbuild](https://sourceforge.net/projects/mpv-player-windows/files/)) pra `bin/mpv.exe`.
+
+Se `bin/mpv.exe` nao existir, o app cai para o mpv instalado no sistema (Program Files ou PATH). Nesse caso, instale com:
 
 ```bash
 winget install mpv.mpv

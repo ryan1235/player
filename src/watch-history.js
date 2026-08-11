@@ -35,6 +35,10 @@ class WatchHistory {
     delete this.data[key];
     this._persist();
   }
+
+  getAll() {
+    return { ...this.data };
+  }
 }
 
 module.exports = WatchHistory;

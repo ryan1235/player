@@ -75,11 +75,18 @@ const debugEl = document.getElementById('ov-debug');
 const dbg = {
   state: document.getElementById('dbg-state'),
   mode: document.getElementById('dbg-mode'),
+  liveState: document.getElementById('dbg-live-state'),
+  healthScore: document.getElementById('dbg-health-score'),
   buffer: document.getElementById('dbg-buffer'),
   latency: document.getElementById('dbg-latency'),
   target: document.getElementById('dbg-target'),
+  confidence: document.getElementById('dbg-confidence'),
   health: document.getElementById('dbg-health'),
   speed: document.getElementById('dbg-speed'),
+  throughput: document.getElementById('dbg-throughput'),
+  throughputInst: document.getElementById('dbg-throughput-inst'),
+  stability: document.getElementById('dbg-stability'),
+  trend: document.getElementById('dbg-trend'),
   fps: document.getElementById('dbg-fps'),
   dropped: document.getElementById('dbg-dropped'),
   bitrate: document.getElementById('dbg-bitrate'),
@@ -93,13 +100,24 @@ let debugVisible = false;
 function renderDebug(info) {
   if (!debugVisible || !info) return;
   const state = info.state || {};
+  const net = info.network || null;
   dbg.state.textContent = state.status || '—';
   dbg.mode.textContent = state.mode || (info.isLive ? 'LIVE' : 'VOD');
+  dbg.liveState.textContent = info.healthState || '—';
+  dbg.healthScore.textContent = typeof info.healthScore === 'number' ? `${info.healthScore}/100` : '—';
   dbg.buffer.textContent = typeof info.cacheAmount === 'number' ? `${info.cacheAmount.toFixed(2)}s` : '—';
   dbg.latency.textContent = typeof info.liveDelay === 'number' ? `${info.liveDelay.toFixed(2)}s` : '—';
   dbg.target.textContent = typeof info.targetLiveDelay === 'number' ? `${info.targetLiveDelay.toFixed(1)}s` : '—';
+  const conf = info.bufferConfidence;
+  dbg.confidence.textContent = conf
+    ? `-${conf.discountSecs.toFixed(1)}s (${conf.stableMinutes.toFixed(1)}min limpo)`
+    : '—';
   dbg.health.textContent = info.liveHealth || '—';
   dbg.speed.textContent = typeof info.currentSpeed === 'number' ? info.currentSpeed.toFixed(2) + 'x' : '—';
+  dbg.throughput.textContent = net && net.hasData ? `${(net.avg10sBps * 8 / 1e6).toFixed(2)} Mbps` : '—';
+  dbg.throughputInst.textContent = net && net.hasData ? `${(net.instantBps * 8 / 1e6).toFixed(2)} Mbps` : '—';
+  dbg.stability.textContent = net && net.hasData ? `${Math.round(net.stability * 100)}%` : '—';
+  dbg.trend.textContent = net ? (net.trend || '—') : '—';
   dbg.fps.textContent = info.fps ? info.fps.toFixed(2) : '—';
   dbg.dropped.textContent = info.droppedFrames ?? '—';
   dbg.bitrate.textContent = info.bitrate ? `${(info.bitrate / 1e6).toFixed(2)} Mbps` : '—';
@@ -131,6 +149,66 @@ let lastPaused = true;
 let duration = 0;
 let position = 0;
 let scrubbing = false;
+
+// --- Qualidade da conexão (Configurações > Ao Vivo) ---
+let showQualityLabel = true;
+window.api.getSettings().then((s) => { showQualityLabel = s.showLiveQualityLabel !== false; }).catch(() => {});
+window.api.onShowLiveQualityLabelChanged((value) => { showQualityLabel = value !== false; });
+
+// Traduz o estado interno do StreamHealth (HEALTHY/DEGRADING/CRITICAL/
+// BUFFERING/RECOVERING) pro rotulo simples que o usuario comum ve — dados
+// tecnicos detalhados ficam so no overlay de debug (Ctrl+Shift+D).
+function qualityLabelFor(healthState) {
+  switch (healthState) {
+    case 'HEALTHY': return 'Excelente';
+    case 'DEGRADING': return 'Boa';
+    default: return 'Instável';
+  }
+}
+
+// --- Pop-ups do sistema de live (Configurações > Ao Vivo > Notificações) ---
+// Pilha pequena no canto superior direito: cada acao notavel do Live Engine
+// (mudanca de velocidade, salto pra borda, stall/recuperacao, reconexao)
+// emite um evento 'player:live-event' (mpv.js -> main.js -> aqui), so em
+// TRANSICOES de estado — nunca a cada tick — entao a frequencia natural ja
+// e baixa; o limite de itens visiveis abaixo e so uma garantia extra pra
+// uma sequencia rapida de tentativas de reconexao nao lotar a tela.
+const liveToastsContainer = document.getElementById('ov-live-toasts');
+const LIVE_TOAST_MAX_VISIBLE = 3;
+const LIVE_TOAST_DURATION_MS = 3800;
+let showLiveEventToasts = true;
+window.api.getSettings().then((s) => { showLiveEventToasts = s.showLiveEventToasts !== false; }).catch(() => {});
+window.api.onShowLiveEventToastsChanged((value) => { showLiveEventToasts = value !== false; });
+
+function dismissLiveToast(el, immediate) {
+  if (!el || !el.parentNode) return;
+  clearTimeout(el._dismissTimer);
+  el.classList.remove('ov-live-toast-in');
+  el.classList.add('ov-live-toast-out');
+  const removeNow = () => { if (el.parentNode) el.parentNode.removeChild(el); };
+  if (immediate) removeNow();
+  else setTimeout(removeNow, 220);
+}
+
+function showLiveToast({ type, message } = {}) {
+  if (!showLiveEventToasts || !message) return;
+  while (liveToastsContainer.children.length >= LIVE_TOAST_MAX_VISIBLE) {
+    dismissLiveToast(liveToastsContainer.lastElementChild, true);
+  }
+  const el = document.createElement('div');
+  el.className = `ov-live-toast ov-live-toast-${type || 'info'}`;
+  const dot = document.createElement('span');
+  dot.className = 'ov-live-toast-dot';
+  const text = document.createElement('span');
+  text.textContent = message;
+  el.appendChild(dot);
+  el.appendChild(text);
+  liveToastsContainer.insertBefore(el, liveToastsContainer.firstChild);
+  requestAnimationFrame(() => el.classList.add('ov-live-toast-in'));
+  el._dismissTimer = setTimeout(() => dismissLiveToast(el), LIVE_TOAST_DURATION_MS);
+}
+
+window.api.onLiveEvent((info) => showLiveToast(info));
 
 // --- Play/pause, transporte, volume, legenda, aspecto, fullscreen ---
 btnPlayPause.addEventListener('click', withErr(() => window.api.togglePlayPause()));
@@ -423,6 +501,7 @@ function renderStatsBody() {
   const state = info.state || {};
   const rows = [
     ['Estado', state.status || '—'],
+    ['Saúde da conexão', typeof info.healthScore === 'number' ? `${info.healthScore}/100` : '—'],
     ['Buffer', typeof info.cacheAmount === 'number' ? `${info.cacheAmount.toFixed(2)}s` : '—'],
     ['Latência', typeof info.liveDelay === 'number' ? `${info.liveDelay.toFixed(2)}s` : '—'],
     ['Download', info.downloadSpeed ? `${(info.downloadSpeed / 1e6).toFixed(2)} MB/s` : '—'],
@@ -652,7 +731,8 @@ window.api.onPlayerStatus((info) => {
       cacheStr = amt.toFixed(1) + 's';
     }
     const statsEl = document.getElementById('ov-live-stats');
-    statsEl.textContent = `(Buffer: ${cacheStr})`;
+    const qualityPrefix = showQualityLabel ? `${qualityLabelFor(info.healthState)} · ` : '';
+    statsEl.textContent = `${qualityPrefix}(Buffer: ${cacheStr})`;
     statsEl.className = `ov-live-stats ${info.liveHealth || 'good'}`;
   } else {
     ovRoot.classList.remove('ov-live');

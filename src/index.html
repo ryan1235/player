@@ -2,104 +2,644 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<title>Player</title>
+<title>Aura Player</title>
 <link rel="stylesheet" href="theme.css" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app">
-    <header>
-      <div class="brand">
-        <span class="brand-mark">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
-        </span>
-        <div class="brand-text">
-          <h1>Player</h1>
-          <p>Vídeo local &amp; DLNA</p>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+          </span>
+          <div class="brand-text">
+            <h1>Aura Player</h1>
+            <p data-i18n="brand.tagline">Vídeo local &amp; DLNA</p>
+          </div>
         </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Recolher menu" title="Recolher menu" aria-expanded="true" data-i18n-title="sidebar.toggleTitle">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M15 5 8 12l7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </div>
-      <nav>
-        <button class="tab active" data-tab="local">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 4h16v16H4V4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9.5 9.5 15 12l-5.5 2.5v-5Z" fill="currentColor"/></svg>
-          Arquivos locais
+
+      <nav class="side-nav" id="side-nav" aria-label="Navegação principal" data-i18n-attr="aria-label:a11y.mainNav">
+        <button class="nav-item active" data-tab="inicio" title="Início" data-i18n-title="nav.inicio">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M4 11.5 12 4l8 7.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10v8.5a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1V10" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.inicio">Início</span>
         </button>
-        <button class="tab" data-tab="dlna">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M4 10a8 8 0 0 1 16 0M7 12.5a4.5 4.5 0 0 1 9 0M12 19a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          DLNA
+
+        <button class="nav-item" data-tab="dispositivos" title="Dispositivos" data-i18n-title="nav.dispositivos">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M4 10a8 8 0 0 1 16 0M7 12.5a4.5 4.5 0 0 1 9 0M12 19a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.dispositivos">Dispositivos</span>
         </button>
-        <button class="tab" data-tab="cast">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M3 10V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14a6 6 0 0 1 6 6M3 17.5a2.5 2.5 0 0 1 2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.75" cy="20.25" r="1" fill="currentColor"/></svg>
-          Receber
+
+        <button class="nav-item" data-tab="player" title="Player">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.player">Player</span>
+          <span class="nav-now-playing" id="nav-now-playing" hidden></span>
         </button>
-        <button class="tab" data-tab="player">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
-          Player
+
+        <div class="nav-divider" role="separator"></div>
+
+        <button class="nav-item" data-tab="biblioteca" title="Biblioteca" data-i18n-title="nav.biblioteca">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><rect x="3.5" y="4.5" width="17" height="15" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.5v15M14 9.5h3.5M14 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.biblioteca">Biblioteca</span>
+        </button>
+
+        <button class="nav-item" data-tab="historico" title="Histórico" data-i18n-title="nav.historico">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12.5" r="7.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 8.5V12.5l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 4.5 4 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.historico">Histórico</span>
         </button>
       </nav>
-    </header>
 
-    <main>
-      <section id="tab-player" class="tab-content">
-        <div class="player-stage" id="player-stage">
-          <div id="video-host"></div>
-        </div>
-      </section>
-
-      <section id="tab-local" class="tab-content active">
-        <div class="empty-state">
-          <span class="empty-icon">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+      <div class="side-nav-footer">
+        <button class="nav-item" data-tab="config" title="Configurações" data-i18n-title="nav.config">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19.5a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4.5a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4.5a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H19.5a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
           </span>
-          <h2>Reproduzir um arquivo</h2>
-          <p class="hint">É preciso ter o mpv instalado e no PATH.</p>
-          <button id="btn-pick" class="btn-primary">Abrir arquivo...</button>
-        </div>
-      </section>
+          <span class="nav-label" data-i18n="nav.config">Configurações</span>
+        </button>
+      </div>
+    </aside>
 
-      <section id="tab-dlna" class="tab-content">
-        <div class="section-toolbar">
-          <button id="btn-discover" class="btn-secondary">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M11 19a8 8 0 1 1 5.6-2.3M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Procurar servidores
+    <div class="app-main">
+      <main id="main-content">
+
+        <section id="tab-player" class="tab-content">
+          <div class="player-stage" id="player-stage">
+            <div id="video-host"></div>
+          </div>
+        </section>
+
+        <section id="tab-inicio" class="tab-content active">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title" data-i18n="home.title">Início</h2>
+              <p class="page-subtitle" data-i18n="home.subtitle">Reproduza um arquivo de vídeo local do seu computador.</p>
+            </div>
+          </div>
+
+          <div class="home-grid">
+            <div class="card card-hero">
+              <span class="card-hero-icon">
+                <svg viewBox="0 0 24 24" width="30" height="30" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+              </span>
+              <h3 data-i18n="home.hero.title">Reproduzir um arquivo</h3>
+              <p class="hint" data-i18n="home.hero.hint">É preciso ter o mpv instalado e no PATH.</p>
+              <button id="btn-pick" class="btn-primary" data-i18n="home.hero.button">Abrir arquivo...</button>
+            </div>
+
+            <div class="card card-now-playing" id="home-now-playing" hidden>
+              <span class="card-eyebrow" data-i18n="home.nowPlaying.eyebrow">Em reprodução</span>
+              <h3 id="home-now-playing-title">—</h3>
+              <button class="btn-secondary" id="home-goto-player">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+                <span data-i18n="home.gotoPlayer">Ir para o Player</span>
+              </button>
+            </div>
+
+            <button class="card card-link" data-goto="dispositivos">
+              <span class="card-link-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M4 10a8 8 0 0 1 16 0M7 12.5a4.5 4.5 0 0 1 9 0M12 19a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </span>
+              <div>
+                <h3 data-i18n="home.devicesCard.title">Dispositivos DLNA</h3>
+                <p class="hint" data-i18n="home.devicesCard.hint">Navegue por servidores da rede ou receba vídeos de outro aparelho.</p>
+              </div>
+            </button>
+
+            <button class="card card-link" data-goto="config">
+              <span class="card-link-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 13.5a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V19.5a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H4.5a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H10a1.65 1.65 0 0 0 1-1.51V4.5a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V10a1.65 1.65 0 0 0 1.51 1H19.5a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+              </span>
+              <div>
+                <h3 data-i18n="home.settingsCard.title">Configurações</h3>
+                <p class="hint" data-i18n="home.settingsCard.hint">Aparência, DLNA, player e mais.</p>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <section id="tab-biblioteca" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title" data-i18n="library.title">Biblioteca</h2>
+              <p class="page-subtitle" id="library-subtitle" data-i18n="library.subtitleEmpty">Escolha uma pasta com seus vídeos para navegar por ela como uma biblioteca.</p>
+            </div>
+            <div class="page-actions" id="library-actions" hidden>
+              <button class="btn-secondary" id="btn-library-rescan" data-i18n="library.actions.rescan">Atualizar</button>
+              <button class="btn-secondary" id="btn-library-change-folder" data-i18n="library.actions.changeFolder">Trocar pasta</button>
+            </div>
+          </div>
+
+          <div class="empty-state empty-state-inline" id="library-empty-state">
+            <span class="empty-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none"><rect x="3.5" y="4.5" width="17" height="15" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.5v15M14 9.5h3.5M14 13h3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <h3 data-i18n="library.empty.title">Nenhuma pasta configurada</h3>
+            <p class="hint" data-i18n="library.empty.hint">Escolha uma pasta com seus vídeos — o app escaneia e gera miniaturas automaticamente.</p>
+            <button class="btn-primary" id="btn-library-pick-folder" data-i18n="library.empty.button">Escolher pasta...</button>
+          </div>
+
+          <div class="library-progress" id="library-progress" hidden>
+            <div class="library-progress-track"><div class="library-progress-fill" id="library-progress-fill"></div></div>
+            <p class="hint" id="library-progress-text"></p>
+          </div>
+
+          <div class="library-grid" id="library-grid"></div>
+        </section>
+
+        <section id="tab-dispositivos" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title" data-i18n="devices.title">Dispositivos</h2>
+              <p class="page-subtitle" data-i18n="devices.subtitle">Navegue por servidores DLNA da rede ou receba vídeos de outro aparelho.</p>
+            </div>
+          </div>
+
+          <div class="pill-tabs" id="device-view-tabs" role="tablist">
+            <button class="pill-tab active" data-device-view="servers" role="tab" aria-selected="true" data-i18n="devices.tab.servers">Servidores DLNA</button>
+            <button class="pill-tab" data-device-view="receive" role="tab" aria-selected="false" data-i18n="devices.tab.receive">Receber (Cast)</button>
+          </div>
+
+          <div class="device-view active" data-device-view-panel="servers">
+            <div class="section-toolbar">
+              <button id="btn-discover" class="btn-secondary">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M11 19a8 8 0 1 1 5.6-2.3M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span data-i18n="devices.discover">Procurar servidores</span>
+              </button>
+              <div id="dlna-breadcrumb" class="breadcrumb"></div>
+            </div>
+
+            <div class="empty-state empty-state-inline" id="dlna-initial-state">
+              <span class="empty-icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none"><path d="M4 10a8 8 0 0 1 16 0M7 12.5a4.5 4.5 0 0 1 9 0M12 19a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </span>
+              <h3 data-i18n="devices.initial.title">Nenhuma busca realizada ainda</h3>
+              <p class="hint" data-i18n="devices.initial.hint">Clique em "Procurar servidores" para encontrar NAS, PCs com Plex/Jellyfin ou compartilhamento de mídia na sua rede local.</p>
+            </div>
+
+            <ul id="dlna-list" class="item-list"></ul>
+          </div>
+
+          <div class="device-view" data-device-view-panel="receive">
+            <div class="empty-state">
+              <span class="empty-icon">
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path d="M3 10V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14a6 6 0 0 1 6 6M3 17.5a2.5 2.5 0 0 1 2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.75" cy="20.25" r="1" fill="currentColor"/></svg>
+              </span>
+              <h2 data-i18n="devices.receive.title">Aparecer como opção de Cast</h2>
+              <p class="hint" data-i18n="devices.receive.hint">Ative para este PC aparecer como opção de "Cast"/"Play To"/"Transmitir para dispositivo" em apps do celular (BubbleUPnP, VLC mobile, players com DLNA).</p>
+              <button id="btn-cast-toggle" class="btn-primary" data-i18n="devices.receive.activate">Ativar recepção</button>
+              <p id="cast-status" class="hint status-line"></p>
+
+              <div id="cast-activity-row" class="activity-row">
+                <span id="cast-activity-dot" class="activity-dot"></span>
+                <span id="cast-activity-text" data-i18n="devices.receive.waiting">Aguardando conexão...</span>
+              </div>
+
+              <p class="hint settings-pointer">
+                <span data-i18n="devices.receive.settingsPointer">Preferências de descoberta automática e interface de rede ficam em</span>
+                <button class="link-inline" data-goto="config" data-settings-panel="dlna" data-i18n="devices.receive.settingsLink">Configurações → DLNA</button>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-historico" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title" data-i18n="history.title">Histórico</h2>
+              <p class="page-subtitle" data-i18n="history.subtitle">Arquivos e transmissões que você começou a assistir, com a posição salva automaticamente.</p>
+            </div>
+          </div>
+
+          <div class="empty-state empty-state-inline" id="history-empty-state" hidden>
+            <span class="empty-icon">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none"><circle cx="12" cy="12.5" r="7.5" stroke="currentColor" stroke-width="1.6"/><path d="M12 8.5V12.5l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3 data-i18n="history.empty.title">Nada por aqui ainda</h3>
+            <p class="hint" data-i18n="history.empty.hint">Assista a um vídeo local ou pelo DLNA — a posição é salva automaticamente e aparece aqui.</p>
+          </div>
+
+          <ul id="history-list" class="item-list history-list"></ul>
+        </section>
+
+        <section id="tab-config" class="tab-content">
+          <div class="page-header">
+            <div>
+              <h2 class="page-title" data-i18n="config.title">Configurações</h2>
+              <p class="page-subtitle" data-i18n="config.subtitle">Preferências do aplicativo, organizadas por categoria.</p>
+            </div>
+          </div>
+
+          <div class="settings-layout">
+            <nav class="settings-nav" id="settings-nav" aria-label="Categorias de configurações" data-i18n-attr="aria-label:a11y.settingsCategories">
+              <button class="settings-nav-item active" data-settings="geral" data-i18n="config.nav.geral">Geral</button>
+              <button class="settings-nav-item" data-settings="aparencia" data-i18n="config.nav.aparencia">Aparência</button>
+              <button class="settings-nav-item" data-settings="reproducao" data-i18n="config.nav.reproducao">Reprodução</button>
+              <button class="settings-nav-item" data-settings="player" data-i18n="config.nav.player">Player</button>
+              <button class="settings-nav-item" data-settings="ao-vivo" data-i18n="config.nav.aoVivo">Ao Vivo</button>
+              <button class="settings-nav-item" data-settings="dlna" data-i18n="config.nav.dlna">DLNA</button>
+              <button class="settings-nav-item" data-settings="avancado" data-i18n="config.nav.avancado">Avançado</button>
+              <button class="settings-nav-item" data-settings="sobre" data-i18n="config.nav.sobre">Sobre</button>
+            </nav>
+
+            <div class="settings-content">
+
+              <div class="settings-panel active" data-panel="geral">
+                <h3 class="settings-panel-title" data-i18n="geral.title">Geral</h3>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="geral.alwaysOnTop.title">Janela sempre visível</h4>
+                    <p data-i18n="geral.alwaysOnTop.hint">Mantém a janela do Aura Player acima das demais janelas abertas.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-always-on-top" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="geral.launchOnBoot.title">Iniciar com o Windows</h4>
+                    <p data-i18n="geral.launchOnBoot.hint">Abrir o aplicativo automaticamente ao ligar o computador.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-launch-on-boot" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="geral.language.title">Idioma</h4>
+                    <p data-i18n="geral.language.hint">Idioma da interface do aplicativo.</p>
+                  </div>
+                  <select class="select-input" id="sel-language">
+                    <option value="pt">Português (Brasil)</option>
+                    <option value="en">English</option>
+                  </select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="geral.checkUpdates.title">Verificar atualizações automaticamente</h4>
+                    <p data-i18n="geral.checkUpdates.hint">Avisar quando uma nova versão estiver disponível (checa ao abrir o app).</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-check-updates" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card setting-card-stack">
+                  <div class="setting-info">
+                    <h4 data-i18n="geral.manualCheck.title">Verificação manual</h4>
+                    <p id="update-status" class="hint" data-i18n="geral.manualCheck.hint">Clique para checar agora.</p>
+                  </div>
+                  <button class="btn-secondary" id="btn-check-updates" data-i18n="geral.manualCheck.button">Verificar agora</button>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="aparencia">
+                <h3 class="settings-panel-title" data-i18n="aparencia.title">Aparência</h3>
+
+                <div class="setting-card setting-card-stack">
+                  <div class="setting-info">
+                    <h4 data-i18n="aparencia.theme.title">Tema</h4>
+                    <p data-i18n="aparencia.theme.hint">Escolha entre tema claro, escuro ou seguir o sistema.</p>
+                  </div>
+                  <div class="segmented" id="theme-switch" role="radiogroup" aria-label="Tema" data-i18n-attr="aria-label:a11y.theme">
+                    <button class="segmented-btn" data-theme-choice="dark" role="radio">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" fill="currentColor"/></svg>
+                      <span data-i18n="aparencia.theme.dark">Escuro</span>
+                    </button>
+                    <button class="segmented-btn" data-theme-choice="light" role="radio">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5M18.4 18.4l-1.5-1.5M7.1 7.1 5.6 5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                      <span data-i18n="aparencia.theme.light">Claro</span>
+                    </button>
+                    <button class="segmented-btn" data-theme-choice="auto" role="radio">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><rect x="3" y="4.5" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 20h8M12 16.5V20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                      <span data-i18n="aparencia.theme.auto">Automático</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="aparencia.reduceMotion.title">Reduzir animações</h4>
+                    <p data-i18n="aparencia.reduceMotion.hint">Desativa transições e microinterações da interface.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-reduce-motion" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="aparencia.uiScale.title">Escala da interface</h4>
+                    <p data-i18n="aparencia.uiScale.hint">Tamanho dos textos e elementos da interface (não afeta o vídeo).</p>
+                  </div>
+                  <select class="select-input" id="sel-ui-scale">
+                    <option value="0.9">90%</option>
+                    <option value="1">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.25">125%</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="reproducao">
+                <h3 class="settings-panel-title" data-i18n="reproducao.title">Reprodução</h3>
+
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info">
+                    <h4 data-i18n="reproducao.resume.title">Retomar de onde parou</h4>
+                    <p data-i18n="reproducao.resume.hint">A posição de reprodução é salva automaticamente e retomada ao reabrir o mesmo arquivo ou URL.</p>
+                  </div>
+                  <span class="status-chip status-chip-success" data-i18n="reproducao.alwaysOn">Sempre ativo</span>
+                </div>
+
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info">
+                    <h4 data-i18n="reproducao.audio.title">Áudio e legenda em Português</h4>
+                    <p data-i18n="reproducao.audio.hint">Quando disponíveis, faixas em pt-BR/pt/por são selecionadas automaticamente.</p>
+                  </div>
+                  <span class="status-chip status-chip-success" data-i18n="reproducao.alwaysOn">Sempre ativo</span>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="reproducao.autoPlayNext.title">Reproduzir próximo automaticamente</h4>
+                    <p data-i18n="reproducao.autoPlayNext.hint">Ao terminar um vídeo aberto pela pasta DLNA, reproduz o próximo item da mesma pasta.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-auto-play-next" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="reproducao.defaultVolume.title">Volume padrão</h4>
+                    <p data-i18n="reproducao.defaultVolume.hint">Volume inicial ao abrir o primeiro vídeo da sessão.</p>
+                  </div>
+                  <select class="select-input" id="sel-default-volume">
+                    <option value="25">25%</option>
+                    <option value="50">50%</option>
+                    <option value="75">75%</option>
+                    <option value="100">100%</option>
+                    <option value="125">125%</option>
+                    <option value="150">150%</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="player">
+                <h3 class="settings-panel-title" data-i18n="player.title">Player</h3>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.fitMode.title">Ajuste de imagem</h4>
+                    <p data-i18n="player.fitMode.hint">Como o vídeo se encaixa na janela (também disponível nos controles do player).</p>
+                  </div>
+                  <select class="select-input" id="sel-fit-mode"></select>
+                </div>
+
+                <div class="setting-card setting-card-stack">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.shortcuts.title">Atalhos de teclado</h4>
+                    <p data-i18n="player.shortcuts.hint">Funcionam quando a aba Player está ativa.</p>
+                  </div>
+                  <div class="shortcut-list">
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.playPause">Reproduzir / pausar</span><kbd data-i18n="player.shortcuts.space">Espaço</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.back10">Voltar 10s</span><kbd>←</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.fwd10">Avançar 10s</span><kbd>→</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.mute">Mudo</span><kbd>M</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.fullscreen">Tela cheia</span><kbd>F</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.exitFullscreen">Sair da tela cheia</span><kbd>Esc</kbd></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="ao-vivo">
+                <h3 class="settings-panel-title" data-i18n="aoVivo.title">Ao Vivo</h3>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="aoVivo.bufferProfile.title">Perfil de buffer</h4>
+                    <p data-i18n="aoVivo.bufferProfile.hint">Controla o equilíbrio entre latência (distância até a borda ao vivo) e estabilidade. Automático se ajusta sozinho à sua conexão em tempo real.</p>
+                  </div>
+                  <select class="select-input" id="sel-live-buffer-profile">
+                    <option value="auto" data-i18n="aoVivo.bufferProfile.auto">Automático (recomendado)</option>
+                    <option value="low" data-i18n="aoVivo.bufferProfile.low">Baixa latência</option>
+                    <option value="balanced" data-i18n="aoVivo.bufferProfile.balanced">Balanceado</option>
+                    <option value="stable" data-i18n="aoVivo.bufferProfile.stable">Estável</option>
+                    <option value="custom" data-i18n="aoVivo.bufferProfile.custom">Personalizado</option>
+                  </select>
+                </div>
+
+                <div class="setting-card" id="row-live-custom-target" hidden>
+                  <div class="setting-info">
+                    <h4 data-i18n="aoVivo.customTarget.title">Latência alvo</h4>
+                    <p data-i18n="aoVivo.customTarget.hint">Quantos segundos atrás do Ao Vivo o app deve tentar manter. É uma meta, não uma trava — se a rede não aguentar, o app aumenta a margem automaticamente pra evitar travar.</p>
+                  </div>
+                  <div class="number-input-wrap">
+                    <input type="number" class="select-input number-input" id="num-live-custom-target" min="1" max="30" step="1" />
+                    <span data-i18n="aoVivo.customTarget.unit">segundos</span>
+                  </div>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="aoVivo.qualityLabel.title">Mostrar qualidade da conexão</h4>
+                    <p data-i18n="aoVivo.qualityLabel.hint">Exibe um rótulo simples (Excelente / Boa / Instável) junto ao indicador de buffer durante uma transmissão ao vivo.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-live-quality-label" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="aoVivo.eventToasts.title">Notificações do sistema de live</h4>
+                    <p data-i18n="aoVivo.eventToasts.hint">Mostra pop-ups pequenos quando o app ajusta a velocidade, pula para o Ao Vivo, recupera de um travamento ou reconecta.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-live-event-toasts" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info">
+                    <h4 data-i18n="aoVivo.autoRecovery.title">Recuperação automática</h4>
+                    <p data-i18n="aoVivo.autoRecovery.hint">Ao detectar quedas de buffer ou de conexão, o app ajusta a margem de segurança e recupera a reprodução sozinho, sem reiniciar o vídeo do zero quando não é necessário.</p>
+                  </div>
+                  <span class="status-chip status-chip-success" data-i18n="reproducao.alwaysOn">Sempre ativo</span>
+                </div>
+
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info">
+                    <h4 data-i18n="aoVivo.debug.title">Métricas técnicas</h4>
+                    <p data-i18n="aoVivo.debug.hint">Durante uma transmissão ao vivo, pressione Ctrl+Shift+D para ver throughput, estabilidade da rede, saúde da conexão e estado interno do sistema de live em tempo real.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="dlna">
+                <h3 class="settings-panel-title" data-i18n="dlna.title">DLNA</h3>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="dlna.autoStart.title">Iniciar recepção automaticamente</h4>
+                    <p data-i18n="dlna.autoStart.hint">Ativa o modo "Receber" (Cast) assim que o aplicativo é aberto.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-auto-start" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="dlna.interface.title">Interface de rede</h4>
+                    <p data-i18n="dlna.interface.hint">Qual interface usar para anunciar o modo de recepção na rede.</p>
+                  </div>
+                  <select class="select-input" id="sel-interface"></select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="dlna.discoveryTimeout.title">Tempo de descoberta</h4>
+                    <p data-i18n="dlna.discoveryTimeout.hint">Duração da busca por servidores DLNA na rede.</p>
+                  </div>
+                  <select class="select-input" id="sel-discovery-timeout">
+                    <option value="2000" data-i18n="dlna.discoveryTimeout.2s">2 segundos</option>
+                    <option value="4000" data-i18n="dlna.discoveryTimeout.4s">4 segundos (padrão)</option>
+                    <option value="8000" data-i18n="dlna.discoveryTimeout.8s">8 segundos</option>
+                    <option value="15000" data-i18n="dlna.discoveryTimeout.15s">15 segundos</option>
+                  </select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="dlna.autoReconnect.title">Reconexão automática</h4>
+                    <p data-i18n="dlna.autoReconnect.hint">Se a rede mudar (troca de Wi-Fi, VPN) enquanto o modo Receber está ativo, reinicia a recepção sozinho.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-auto-reconnect" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="avancado">
+                <h3 class="settings-panel-title" data-i18n="avancado.title">Avançado</h3>
+
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info">
+                    <h4 data-i18n="avancado.mpvEngine.title">Mecanismo de reprodução (mpv)</h4>
+                    <p id="mpv-engine-status" data-i18n="avancado.mpvEngine.checking">Verificando...</p>
+                  </div>
+                  <span id="mpv-engine-chip" class="status-chip status-chip-success" data-i18n="avancado.mpvEngine.bundled" hidden>Embutido</span>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="avancado.logs.title">Logs</h4>
+                    <p data-i18n="avancado.logs.hint">Eventos da sessão atual (não é salvo em disco nem persiste entre reinicializações).</p>
+                  </div>
+                  <button class="btn-secondary" id="btn-open-logs" data-i18n="avancado.logs.button">Abrir logs</button>
+                </div>
+
+                <div class="setting-card setting-disabled">
+                  <div class="setting-info">
+                    <h4><span data-i18n="avancado.diagnostics.title">Diagnóstico</span> <span class="badge-soon" data-i18n="common.comingSoon">Em breve</span></h4>
+                    <p data-i18n="avancado.diagnostics.hint">Informações de diagnóstico para suporte técnico.</p>
+                  </div>
+                  <button class="btn-secondary" disabled data-i18n="avancado.diagnostics.button">Gerar relatório</button>
+                </div>
+
+                <div class="setting-card setting-disabled">
+                  <div class="setting-info">
+                    <h4><span data-i18n="avancado.cache.title">Cache</span> <span class="badge-soon" data-i18n="common.comingSoon">Em breve</span></h4>
+                    <p data-i18n="avancado.cache.hint">Limpar arquivos temporários do aplicativo.</p>
+                  </div>
+                  <button class="btn-secondary" disabled data-i18n="avancado.cache.button">Limpar cache</button>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="sobre">
+                <h3 class="settings-panel-title" data-i18n="sobre.title">Sobre</h3>
+
+                <div class="about-card">
+                  <span class="brand-mark brand-mark-lg">
+                    <svg viewBox="0 0 24 24" width="26" height="26" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
+                  </span>
+                  <div>
+                    <h4>Aura Player</h4>
+                    <p class="hint" data-i18n="sobre.appDescription">Player de vídeo local com navegação e recepção DLNA/UPnP.</p>
+                  </div>
+                </div>
+
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info"><h4 data-i18n="sobre.version">Versão</h4></div>
+                  <span class="status-chip" id="about-version">—</span>
+                </div>
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info"><h4 data-i18n="sobre.videoEngine">Motor de vídeo</h4></div>
+                  <span class="status-chip">mpv</span>
+                </div>
+                <div class="setting-card setting-info-only">
+                  <div class="setting-info"><h4 data-i18n="sobre.electron">Electron</h4></div>
+                  <span class="status-chip" id="about-electron">—</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <footer class="app-status-bar">
+        <span id="status"></span>
+      </footer>
+    </div>
+
+    <div class="modal-backdrop" id="logs-modal-backdrop" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Logs">
+        <div class="modal-header">
+          <span data-i18n="logs.modal.title">Logs da sessão</span>
+          <button class="btn-secondary btn-icon" id="btn-logs-close" aria-label="Fechar" data-i18n-title="a11y.close">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
           </button>
-          <div id="dlna-breadcrumb" class="breadcrumb"></div>
         </div>
-        <ul id="dlna-list" class="item-list"></ul>
-      </section>
-
-      <section id="tab-cast" class="tab-content">
-        <div class="empty-state">
-          <span class="empty-icon">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none"><path d="M3 10V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14a6 6 0 0 1 6 6M3 17.5a2.5 2.5 0 0 1 2.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="3.75" cy="20.25" r="1" fill="currentColor"/></svg>
-          </span>
-          <h2>Aparecer como opção de Cast</h2>
-          <p class="hint">Ative para este PC aparecer como opção de "Cast"/"Play To"/"Transmitir para dispositivo" em apps do celular (BubbleUPnP, VLC mobile, players com DLNA).</p>
-          <button id="btn-cast-toggle" class="btn-primary">Ativar recepção</button>
-          <p id="cast-status" class="hint status-line"></p>
-
-          <div id="cast-activity-row" class="activity-row">
-            <span id="cast-activity-dot" class="activity-dot"></span>
-            <span id="cast-activity-text">Aguardando conexão...</span>
-          </div>
-
-          <div class="cast-options">
-            <label class="option-row">
-              <input type="checkbox" id="chk-auto-start" />
-              Iniciar recepção automaticamente ao abrir o app
-            </label>
-            <label class="option-row option-select">
-              Interface de rede
-              <select id="sel-interface"></select>
-            </label>
-          </div>
+        <pre class="modal-body modal-body-mono" id="logs-modal-body"></pre>
+        <div class="modal-footer">
+          <button class="btn-secondary" id="btn-logs-refresh" data-i18n="logs.modal.refresh">Atualizar</button>
+          <button class="btn-secondary" id="btn-logs-copy" data-i18n="logs.modal.copy">Copiar tudo</button>
         </div>
-      </section>
-    </main>
-
-    <footer class="app-status-bar">
-      <span id="status"></span>
-    </footer>
+      </div>
+    </div>
   </div>
+  <script src="i18n.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

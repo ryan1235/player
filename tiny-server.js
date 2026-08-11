@@ -1,0 +1,1 @@
+const http = require('http'); http.createServer((req, res) => { let body = ''; req.on('data', chunk => body += chunk); req.on('end', () => { require('fs').appendFileSync('ui-logs.txt', body + '\n'); res.end('OK'); }); }).listen(3000); console.log('Server running');

@@ -1,0 +1,35 @@
+.download-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.download-strip-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.download-strip-info img {
+  border-radius: 9px;
+  box-shadow: var(--shadow-sm);
+}
+
+.download-strip-info strong {
+  display: block;
+  font-size: 14.5px;
+}
+
+.download-strip-info span {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}

@@ -1,0 +1,16 @@
+.what-is-it {
+  position: relative;
+}
+
+.what-is-it::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent, var(--border), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+}
