@@ -25,6 +25,11 @@ const SWP_NOZORDER = 0x0004;
 const SWP_NOACTIVATE = 0x0010;
 const SWP_SHOWWINDOW = 0x0040;
 const SWP_HIDEWINDOW = 0x0080;
+// Forca o Windows a recalcular/redesenhar a janela mesmo quando X/Y/W/H nao
+// mudam — sem isso, um SetWindowPos "identico" (usado so pra forcar repaint
+// depois de alt-tab, ver main.js forceRepaint()) pode ser otimizado pelo SO
+// e nao redesenhar nada de verdade.
+const SWP_FRAMECHANGED = 0x0020;
 
 // Acha, entre os filhos diretos de parentHandle, a janela que pertence ao
 // processo `pid` — e assim que descobrimos o hwnd que o mpv criou ao ser
@@ -69,7 +74,7 @@ function listChildWindows(parentHandle, maxIterations = 500) {
 function positionEmbeddedWindow(hwnd, x, y, width, height) {
   if (!hwnd) return;
   const visible = width > 0 && height > 0;
-  const flags = SWP_NOZORDER | SWP_NOACTIVATE | (visible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW);
+  const flags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | (visible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW);
   SetWindowPos(hwnd, 0, Math.round(x), Math.round(y), Math.max(0, Math.round(width)), Math.max(0, Math.round(height)), flags);
 }
 

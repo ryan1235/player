@@ -1,0 +1,59 @@
+/* Tema claro premium (estilo Apple/Stripe) — passa mais credibilidade que o
+   escuro cinematografico anterior pra um site de apresentacao de produto.
+   Os objetos 3D continuam com "carcaca" escura (como fotografia real de
+   gadget contra fundo branco), so o CHROME do site (fundo, texto, cards)
+   virou claro. */
+:root {
+  --bg: #ffffff;
+  --bg-elevated: #f7f8fb;
+  --surface: #f4f5f9;
+  --surface-2: #eceef4;
+  --border: #e5e7ef;
+  --border-strong: #d3d6e2;
+
+  --text: #14161f;
+  --text-muted: #5b6072;
+  --text-faint: #8a8fa0;
+
+  --accent: #4f6df2;
+  --accent-2: #7b5cd6;
+  --accent-glow: rgba(79, 109, 242, 0.24);
+  --accent-soft: rgba(79, 109, 242, 0.08);
+
+  /* Painel/scrim: usados em vez de rgba(preto) hardcoded pra dar fundo
+     legivel a texto sobre canvas 3D — trocando pra outro tema so aqui. */
+  --scrim: rgba(255, 255, 255, 0.82);
+  --scrim-strong: rgba(255, 255, 255, 0.94);
+  --tint: rgba(20, 22, 30, 0.045);
+  --tint-strong: rgba(20, 22, 30, 0.08);
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --radius-xl: 32px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 20px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 72px;
+  --space-8: 112px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --font-display: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --max-width: 1240px;
+
+  --shadow-sm: 0 1px 2px rgba(20, 22, 30, 0.05);
+  --shadow-md: 0 16px 40px rgba(20, 22, 30, 0.08);
+  --shadow-lg: 0 28px 70px rgba(20, 22, 30, 0.12);
+
+  /* Cor de fundo/fog usada dentro das cenas 3D (precisa bater com --bg pra
+     nao criar halo visivel onde a niebla comeca). */
+  --scene-bg: #f4f5f9;
+}

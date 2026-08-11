@@ -1,0 +1,8 @@
+.faq-container {
+  max-width: 780px;
+}
+
+.faq-list {
+  margin-top: var(--space-6);
+  border-top: 1px solid var(--border);
+}

@@ -1,0 +1,40 @@
+.mockup-section {
+  position: relative;
+  min-height: 680px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: var(--space-7);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 50%, var(--bg) 100%);
+}
+
+.mockup-canvas-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.mockup-copy {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--scrim-strong);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.mockup-copy .section-title,
+.mockup-copy .section-body {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 720px) {
+  .mockup-section { min-height: 520px; }
+}

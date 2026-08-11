@@ -1,0 +1,140 @@
+.download-final {
+  position: relative;
+  padding: 0 0 var(--space-8);
+  overflow: hidden;
+}
+
+/* Faixa decorativa: so o objeto 3D flutuando, sem nenhum texto por cima —
+   assim nao existe risco de colisao/legibilidade, o texto real fica todo
+   abaixo, em fundo limpo. */
+.download-final-canvas-wrap {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  background: radial-gradient(80% 90% at 50% 40%, #f7f8fb 0%, #eceef4 75%);
+  border-bottom: 1px solid var(--border);
+}
+
+.download-final-header {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 620px;
+  margin: var(--space-6) auto 0;
+}
+
+.download-final-header .eyebrow { justify-content: center; }
+.download-final-header .eyebrow::before { display: none; }
+.download-final-header .section-title,
+.download-final-header .section-body { margin-left: auto; margin-right: auto; }
+
+.download-final-inner { position: relative; }
+
+/* --- Card de download --- */
+.download-card {
+  max-width: 640px;
+  margin: var(--space-6) auto 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.download-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.download-card-header img {
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.download-card-heading { flex: 1; min-width: 0; }
+.download-card-heading h3 { font-size: 18px; margin-bottom: 2px; }
+.download-card-heading p { font-size: 13px; color: var(--text-muted); }
+
+.version-badge {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.download-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.meta-item svg { color: var(--accent); flex-shrink: 0; }
+
+.download-card-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: var(--space-5);
+}
+
+.download-card-note {
+  margin-top: var(--space-3);
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+/* --- Passos de instalacao --- */
+.install-steps {
+  max-width: 920px;
+  margin: var(--space-7) auto 0;
+  text-align: center;
+}
+
+.install-steps-eyebrow { justify-content: center; }
+.install-steps-eyebrow::before { display: none; }
+
+.install-steps-grid {
+  margin-top: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  text-align: left;
+}
+
+/* --- Aviso honesto sobre instalador nao assinado --- */
+.unsigned-note {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 640px;
+  margin: var(--space-6) auto 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(242, 169, 59, 0.08);
+  border: 1px solid rgba(242, 169, 59, 0.28);
+}
+
+.unsigned-note svg { flex-shrink: 0; color: #b9790f; margin-top: 2px; }
+.unsigned-note strong { display: block; font-size: 13.5px; margin-bottom: 4px; }
+.unsigned-note p { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 0; }
+
+@media (max-width: 720px) {
+  .download-final-canvas-wrap { height: 240px; }
+  .download-card-header { flex-wrap: wrap; }
+  .install-steps-grid { grid-template-columns: 1fr; }
+}

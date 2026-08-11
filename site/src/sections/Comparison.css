@@ -1,0 +1,100 @@
+.comparison-header {
+  text-align: center;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.comparison-header .eyebrow { justify-content: center; }
+.comparison-header .eyebrow::before { display: none; }
+.comparison-header .section-title,
+.comparison-header .section-body { margin-left: auto; margin-right: auto; }
+
+.comparison-table-wrap {
+  margin-top: var(--space-6);
+  overflow-x: auto;
+}
+
+.comparison-table {
+  min-width: 620px;
+  max-width: 920px;
+  margin: 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+
+.comparison-row {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr 1fr 1fr;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+}
+
+.comparison-row:last-child { border-bottom: none; }
+
+.comparison-cell {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comparison-cell-label {
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.comparison-row-head .comparison-cell {
+  padding-top: 20px;
+  padding-bottom: 20px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.comparison-col-head {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comparison-col-highlight {
+  background: var(--accent-soft);
+}
+
+.comparison-badge {
+  display: inline-flex;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.comparison-col-highlight-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.comparison-row-cta .comparison-cell {
+  padding: 20px 16px 26px;
+}
+
+.comparison-status-yes { color: #2fa864; }
+.comparison-status-no { color: #b9bec9; }
+.comparison-status-partial { color: #b9790f; }
+
+@media (max-width: 720px) {
+  .comparison-row { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
+  .comparison-cell { padding: 12px 8px; }
+  .comparison-cell-label { font-size: 12.5px; }
+  .comparison-col-head span:not(.comparison-badge) { font-size: 12px; }
+}

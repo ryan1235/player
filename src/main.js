@@ -6,6 +6,10 @@ const dlna = require('./dlna');
 const DlnaRenderer = require('./dlna-renderer');
 const WatchHistory = require('./watch-history');
 const Settings = require('./settings');
+const Library = require('./library');
+const { checkForUpdate } = require('./update-checker');
+const logger = require('./services/logger');
+const packageJson = require('../package.json');
 
 // Impede que o app abra mais de uma vez ao mesmo tempo (rodar "electron ."
 // de novo sem fechar o anterior so foca a janela ja aberta, em vez de duplicar).
@@ -27,9 +31,12 @@ let renderer;
 let lastVideoRect = null;
 let lastCursorPos = null;
 let cursorPollTimer = null;
+let appliedDefaultVolume = false;
+let castSupervisorTimer = null;
 
 const watchHistory = new WatchHistory(path.join(app.getPath('userData'), 'watch-history.json'));
 const settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
+const library = new Library(path.join(app.getPath('userData'), 'library.json'), path.join(app.getPath('userData'), 'thumbnails'));
 
 function getHwndBuffer(win) {
   // Buffer bruto do handle nativo da janela — usado tanto pro --wid do mpv
@@ -145,6 +152,29 @@ function createWindows() {
   // antigo causava um "pulo" — o ResizeObserver do renderer.js manda o retangulo
   // certo assim que o CSS reflow acontece, e da conta do resize sozinho.
   mainWindow.on('move', updateEmbeddedVideoBounds);
+
+  // Alt-tab pra outro app e voltar (ou minimizar/restaurar) as vezes deixa
+  // artefatos visuais (pixels de OUTRA janela "grudados" na area da nossa)
+  // — sintoma conhecido de compor uma janela nativa filha (o mpv via --wid)
+  // dentro de um Electron rodando com aceleracao de hardware desligada (ver
+  // app.disableHardwareAcceleration() acima: e o que permite o filho nativo
+  // aparecer, mas troca o compositor por um caminho GDI mais sujeito a nao
+  // redesenhar sozinho depois de perder/recuperar foco). Forcar um repaint
+  // dos dois BrowserWindows mais um "reposicionamento" do mpv embutido (com
+  // os MESMOS valores — SetWindowPos ainda assim faz o Windows recompor a
+  // regiao) resolve sem precisar mexer no video em si.
+  mainWindow.on('focus', forceRepaint);
+  mainWindow.on('restore', forceRepaint);
+  mainWindow.on('show', forceRepaint);
+}
+
+function forceRepaint() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try { mainWindow.webContents.invalidate(); } catch {}
+  if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+    try { controlsOverlay.webContents.invalidate(); } catch {}
+  }
+  updateEmbeddedVideoBounds();
 }
 
 function updateEmbeddedVideoBounds() {
@@ -234,15 +264,32 @@ app.whenReady().then(async () => {
     screenshotDir = null; // deixa o mpv usar o diretorio padrao dele mesmo
   }
 
-  player = new MPVPlayer(watchHistory, { embedHwnd: getHwndBuffer(mainWindow), fitMode: initialFitMode, screenshotDir });
+  player = new MPVPlayer(watchHistory, {
+    embedHwnd: getHwndBuffer(mainWindow),
+    fitMode: initialFitMode,
+    screenshotDir,
+    liveBufferProfile: settings.get('liveBufferProfile'),
+    liveCustomTargetSecs: settings.get('liveCustomTargetSecs'),
+  });
   player.on('load', ({ target }) => {
     broadcast('player:now-playing', { target });
+    // Volume padrao (Configuracoes > Reproducao) so se aplica no primeiro
+    // arquivo carregado na sessao — depois disso o volume e "ao vivo",
+    // ajustado pelo usuario, e nao deve ser sobrescrito a cada novo video.
+    if (!appliedDefaultVolume) {
+      appliedDefaultVolume = true;
+      const vol = settings.get('defaultVolume');
+      if (typeof vol === 'number') player.setVolume(vol).catch(() => {});
+    }
   });
   player.on('status', (info) => {
     broadcast('player:status', info);
   });
   player.on('tracks', (info) => {
     broadcast('player:tracks', info);
+  });
+  player.on('live-event', (info) => {
+    broadcast('player:live-event', info);
   });
   renderer = new DlnaRenderer(player);
   renderer.on('activity', (info) => {
@@ -262,7 +309,45 @@ app.whenReady().then(async () => {
       console.error('Falha ao iniciar recepcao automaticamente:', err.message);
     }
   }
+
+  startCastSupervisor();
+
+  if (settings.get('checkUpdatesAutomatically')) {
+    checkForUpdate(packageJson.version)
+      .then((result) => {
+        if (result.configured && result.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('update:available', result);
+        }
+      })
+      .catch((err) => logger.network('[update-checker] falha na checagem automatica:', err.message));
+  }
 });
+
+// Supervisiona o modo "Receber" (Configuracoes > DLNA > Reconexao automatica):
+// o servidor HTTP/SSDP fica preso ao IP que estava ativo quando foi ligado.
+// Se a interface de rede mudar (troca de Wi-Fi, VPN liga/desliga, adaptador
+// some) o servidor continua rodando mas fica inacessivel, com o IP antigo
+// anunciado via SSDP. Aqui so verificamos periodicamente se o IP/interface
+// atual ainda bate com o que foi anunciado — sem isso a funcao nao muda
+// nada, e sem nenhum estado escondido alem do timer.
+function startCastSupervisor() {
+  if (castSupervisorTimer) return;
+  castSupervisorTimer = setInterval(async () => {
+    if (!settings.get('autoReconnectCast')) return;
+    const status = renderer.getStatus();
+    if (!status.active) return;
+    const stillValid = status.interfaces.some((i) => i.name === status.interfaceName && i.address === status.ip);
+    if (stillValid) return;
+    logger.network('[cast-supervisor] interface/IP mudou, reiniciando recepcao...');
+    try {
+      await renderer.stop();
+      const next = await renderer.start(settings.get('preferredInterface'));
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cast:status-changed', next);
+    } catch (err) {
+      logger.error('[cast-supervisor] falha ao reiniciar recepcao:', err.message);
+    }
+  }, 15000);
+}
 
 app.on('window-all-closed', () => {
   player.quit();
@@ -271,6 +356,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (castSupervisorTimer) clearInterval(castSupervisorTimer);
   player.quit();
   renderer.stop().catch(() => {});
 });
@@ -334,7 +420,7 @@ ipcMain.handle('window:toggle-always-on-top', () => {
 });
 ipcMain.handle('window:get-always-on-top', () => mainWindow.isAlwaysOnTop());
 
-ipcMain.handle('dlna:discover', () => dlna.discoverServers());
+ipcMain.handle('dlna:discover', () => dlna.discoverServers(settings.get('dlnaDiscoveryTimeout')));
 ipcMain.handle('dlna:browse', (_evt, server, objectId) => dlna.browse(server, objectId));
 
 ipcMain.handle('renderer:start', () => renderer.start(settings.get('preferredInterface')));
@@ -353,6 +439,107 @@ ipcMain.handle('settings:set-interface', async (_evt, name) => {
     await renderer.start(settings.get('preferredInterface'));
   }
   return renderer.getStatus();
+});
+ipcMain.handle('settings:set-discovery-timeout', (_evt, ms) => {
+  settings.set('dlnaDiscoveryTimeout', Number(ms) || 4000);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-default-volume', (_evt, vol) => {
+  settings.set('defaultVolume', Number(vol));
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-auto-play-next', (_evt, value) => {
+  settings.set('autoPlayNext', !!value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-auto-reconnect-cast', (_evt, value) => {
+  settings.set('autoReconnectCast', !!value);
+  return settings.getAll();
+});
+
+const LIVE_BUFFER_PROFILES = ['auto', 'low', 'balanced', 'stable', 'custom'];
+ipcMain.handle('settings:set-live-buffer-profile', (_evt, profile) => {
+  const value = LIVE_BUFFER_PROFILES.includes(profile) ? profile : 'auto';
+  settings.set('liveBufferProfile', value);
+  player.setBufferProfile(value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-live-custom-target', (_evt, secs) => {
+  const value = Math.max(1, Math.min(30, Number(secs) || 5));
+  settings.set('liveCustomTargetSecs', value);
+  player.setCustomTargetSecs(value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-show-live-quality-label', (_evt, value) => {
+  settings.set('showLiveQualityLabel', !!value);
+  // A janela do overlay (onde o rotulo aparece) e um processo separado da
+  // janela principal — sem esse broadcast ela so pegaria a mudanca no
+  // proximo restart do app.
+  broadcast('settings:show-live-quality-label-changed', !!value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-show-live-event-toasts', (_evt, value) => {
+  settings.set('showLiveEventToasts', !!value);
+  broadcast('settings:show-live-event-toasts-changed', !!value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:get-launch-on-boot', () => {
+  try {
+    return app.getLoginItemSettings().openAtLogin;
+  } catch {
+    return false;
+  }
+});
+ipcMain.handle('settings:set-launch-on-boot', (_evt, value) => {
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!value });
+    return app.getLoginItemSettings().openAtLogin;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('history:list', () => {
+  const entries = Object.entries(watchHistory.getAll()).map(([target, entry]) => ({ target, ...entry }));
+  entries.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  return entries;
+});
+ipcMain.handle('history:remove', (_evt, target) => {
+  watchHistory.clear(target);
+  return true;
+});
+
+ipcMain.handle('logs:get', () => logger.getBuffer());
+ipcMain.handle('system:get-mpv-info', () => MPVPlayer.getMpvInfo());
+
+ipcMain.handle('library:get', () => library.getIndex());
+ipcMain.handle('library:pick-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+ipcMain.handle('library:scan', async (_evt, folder) => {
+  const targetFolder = folder || library.getIndex().folder;
+  if (!targetFolder) return library.getIndex();
+  return library.scan(targetFolder, (progress) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('library:scan-progress', progress);
+  });
+});
+ipcMain.handle('library:clear', () => {
+  library.clearFolder();
+  return library.getIndex();
+});
+
+ipcMain.handle('update:check', async () => {
+  try {
+    return await checkForUpdate(packageJson.version);
+  } catch (err) {
+    return { configured: true, error: err.message };
+  }
+});
+ipcMain.handle('settings:set-check-updates', (_evt, value) => {
+  settings.set('checkUpdatesAutomatically', !!value);
+  return settings.getAll();
 });
 
 ipcMain.on('player:set-video-rect', (_evt, rect) => {

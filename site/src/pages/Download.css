@@ -1,0 +1,267 @@
+.download-page { padding-top: 88px; }
+
+/* --- Hero --- */
+/* O canvas 3D e uma FAIXA no fluxo normal (position: relative), igual ao
+   .download-final-canvas-wrap da home — nao absolute/inset:0, que empilhava
+   o objeto 3D por cima do titulo e cortava o texto ao meio. */
+.download-hero { position: relative; overflow: hidden; }
+
+.download-hero-canvas-wrap {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  background: radial-gradient(80% 90% at 50% 30%, #f7f8fb 0%, #eceef4 75%);
+  border-bottom: 1px solid var(--border);
+}
+
+.download-hero-inner { position: relative; text-align: center; padding-top: var(--space-6); }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+  transition: color 0.2s var(--ease-out);
+}
+.back-link:hover { color: var(--accent); }
+
+.download-hero-inner .eyebrow { justify-content: center; }
+.download-hero-inner .eyebrow::before { display: none; }
+.download-hero-inner .section-title,
+.download-hero-inner .section-body { margin-left: auto; margin-right: auto; }
+
+/* --- Card de download (mesma linguagem do DownloadFinal da home) --- */
+.download-card {
+  max-width: 640px;
+  margin: var(--space-6) auto 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+
+.download-card-header { display: flex; align-items: center; gap: var(--space-3); }
+.download-card-header img { border-radius: 14px; box-shadow: var(--shadow-sm); flex-shrink: 0; }
+.download-card-heading { flex: 1; min-width: 0; }
+.download-card-heading h3 { font-size: 18px; margin-bottom: 2px; }
+.download-card-heading p { font-size: 13px; color: var(--text-muted); }
+
+.version-badge {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.download-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.meta-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-muted); }
+.meta-item svg { color: var(--accent); flex-shrink: 0; }
+
+.download-card-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: var(--space-5); }
+.download-card-note { margin-top: var(--space-3); font-size: 12.5px; color: var(--text-faint); }
+
+/* --- Termos de uso --- */
+.terms-block {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.terms-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.terms-checkbox input {
+  margin-top: 2px;
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.terms-toggle {
+  margin-top: var(--space-2);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.terms-body-wrap { overflow: hidden; }
+
+.terms-body {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  white-space: pre-line;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+/* --- Secao do certificado --- */
+.certificate-section { background: var(--bg-elevated); }
+
+.certificate-inner {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: var(--space-7);
+  align-items: start;
+}
+
+.certificate-explain-grid {
+  margin-top: var(--space-5);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.explain-card {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.explain-card svg { color: var(--accent); }
+.explain-card h3 { font-size: 15px; margin: 10px 0 6px; }
+.explain-card p { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; }
+
+.certificate-not-virus {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(47, 168, 100, 0.08);
+  border: 1px solid rgba(47, 168, 100, 0.28);
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.certificate-not-virus svg { flex-shrink: 0; color: #2fa864; margin-top: 1px; }
+
+.certificate-visual { position: sticky; top: 110px; }
+
+.certificate-canvas-wrap {
+  height: 220px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: radial-gradient(80% 90% at 50% 40%, #f7f8fb 0%, #eceef4 75%);
+  border: 1px solid var(--border);
+}
+
+/* --- Mockup do dialogo do SmartScreen do Windows --- */
+.smartscreen-mockup {
+  margin-top: var(--space-4);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #f3f3f3;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.smartscreen-mockup-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #0067c0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.smartscreen-mockup-body {
+  padding: 16px 16px 4px;
+  background: #fff;
+}
+
+.smartscreen-mockup-body p { font-size: 13px; color: #1a1a1a; }
+.smartscreen-mockup-body p.muted { color: #6b6b6b; margin-top: 2px; }
+
+.smartscreen-mockup-steps {
+  padding: 12px 16px 16px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.smartscreen-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+
+.smartscreen-step .step-index {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.smartscreen-step strong { display: block; font-size: 12.5px; color: #1a1a1a; }
+.smartscreen-step p { font-size: 11.5px; color: #6b6b6b; margin-top: 2px; }
+
+/* --- Passos de instalacao --- */
+.install-steps-section { text-align: center; }
+.install-steps-header { justify-content: center; }
+.install-steps-header .eyebrow { justify-content: center; }
+.install-steps-header .eyebrow::before { display: none; }
+
+.install-steps-grid {
+  margin-top: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  text-align: left;
+}
+
+@media (max-width: 900px) {
+  .certificate-inner { grid-template-columns: 1fr; }
+  .certificate-visual { position: static; }
+}
+
+@media (max-width: 720px) {
+  .download-hero-canvas-wrap { height: 280px; }
+  .download-card-header { flex-wrap: wrap; }
+  .install-steps-grid { grid-template-columns: 1fr; }
+}

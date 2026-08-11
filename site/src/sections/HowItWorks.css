@@ -1,0 +1,18 @@
+.how-it-works {
+  background: linear-gradient(180deg, transparent, rgba(91, 124, 250, 0.03), transparent);
+}
+
+.how-it-works-grid {
+  margin-top: var(--space-6);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .how-it-works-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .how-it-works-grid { grid-template-columns: 1fr; }
+}

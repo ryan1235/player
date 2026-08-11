@@ -1,0 +1,21 @@
+CLICKED: svg -> BUTTON#btn-audio-menu -> DIV#ov-audio-wrap -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: BUTTON#btn-audio-menu -> DIV#ov-audio-wrap -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: svg -> BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: BUTTON#btn-segment -> DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
+CLICKED: DIV -> DIV -> DIV -> DIV#ov-bottom -> DIV#ov-root -> BODY -> HTML
