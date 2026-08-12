@@ -24,10 +24,11 @@ import { useI18n } from '../i18n/I18nProvider';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useInView } from '../hooks/useInView';
 import { PARTICLE_COUNT, usePerformanceTier } from '../hooks/usePerformanceTier';
+import { useGitHubReleases } from '../hooks/useGitHubReleases';
 import './Download.css';
 
 export function Download() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const reducedMotion = useReducedMotion();
   const tier = usePerformanceTier();
   const heroCanvas = useInView<HTMLDivElement>();
@@ -35,7 +36,18 @@ export function Download() {
   const [accepted, setAccepted] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
 
-  const href = siteConfig.links.releaseDownloadWindows;
+  // Busca os releases reais direto do GitHub — o botao de download usa
+  // sempre o mais recente, sem precisar editar site.config.ts a cada
+  // versao nova. Enquanto a busca nao termina (ou se falhar), cai pros
+  // valores estaticos do config como rede de seguranca — nunca fica sem
+  // nada pra mostrar.
+  const { releases } = useGitHubReleases();
+  const latestRelease = releases[0] ?? null;
+  const olderReleases = releases.slice(1);
+
+  const href = latestRelease?.installerUrl ?? siteConfig.links.releaseDownloadWindows;
+  const displayVersion = latestRelease?.version || siteConfig.version;
+  const displaySizeBytes = latestRelease?.installerSizeBytes ?? siteConfig.installerSizeBytes;
 
   return (
     <>
@@ -70,7 +82,7 @@ export function Download() {
                   <h3>{t('download.cardTitle')}</h3>
                   <p>{t('download.cardSubtitle')}</p>
                 </div>
-                <span className="version-badge">v{siteConfig.version}</span>
+                <span className="version-badge">v{displayVersion}</span>
               </div>
 
               <div className="download-card-meta">
@@ -80,7 +92,7 @@ export function Download() {
                 </div>
                 <div className="meta-item">
                   <IconDownload size={16} />
-                  <span>{formatBytes(siteConfig.installerSizeBytes)}</span>
+                  <span>{formatBytes(displaySizeBytes)}</span>
                 </div>
                 {siteConfig.mpvBundled && (
                   <div className="meta-item meta-item-text">
@@ -232,8 +244,55 @@ export function Download() {
             </RevealOnScroll>
           </div>
         </section>
+
+        {olderReleases.length > 0 && (
+          <section className="section older-versions-section">
+            <div className="container">
+              <RevealOnScroll className="older-versions-header">
+                <span className="eyebrow">{t('download.olderVersions.title')}</span>
+                <p className="section-body">{t('download.olderVersions.hint')}</p>
+              </RevealOnScroll>
+              <RevealOnScroll delay={0.1} className="older-versions-list">
+                {olderReleases.map((release) => (
+                  <div className="older-version-row" key={release.tagName}>
+                    <div className="older-version-info">
+                      <span className="older-version-tag">
+                        v{release.version}
+                        {release.prerelease && (
+                          <span className="older-version-badge">{t('download.olderVersions.prerelease')}</span>
+                        )}
+                      </span>
+                      <span className="older-version-date">{formatReleaseDate(release.publishedAt, lang)}</span>
+                    </div>
+                    {release.installerUrl ? (
+                      <a href={release.installerUrl} download className="btn btn-secondary btn-sm">
+                        {t('download.olderVersions.download')}
+                        {release.installerSizeBytes ? ` (${formatBytes(release.installerSizeBytes)})` : ''}
+                      </a>
+                    ) : (
+                      <span className="older-version-no-installer">{t('download.olderVersions.noInstaller')}</span>
+                    )}
+                  </div>
+                ))}
+              </RevealOnScroll>
+            </div>
+          </section>
+        )}
       </main>
       <Footer />
     </>
   );
+}
+
+function formatReleaseDate(iso: string, lang: string): string {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat(lang === 'pt' ? 'pt-BR' : 'en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
 }

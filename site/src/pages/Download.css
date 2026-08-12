@@ -255,6 +255,58 @@
   text-align: left;
 }
 
+/* --- Versoes anteriores --- */
+.older-versions-section { background: var(--bg-elevated); text-align: center; }
+.older-versions-header { justify-content: center; }
+.older-versions-header .eyebrow { justify-content: center; }
+.older-versions-header .eyebrow::before { display: none; }
+.older-versions-header .section-body { margin-left: auto; margin-right: auto; }
+
+.older-versions-list {
+  max-width: 560px;
+  margin: var(--space-5) auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.older-version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.older-version-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.older-version-tag {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.older-version-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.older-version-date { font-size: 12.5px; color: var(--text-muted); }
+.older-version-no-installer { font-size: 12.5px; color: var(--text-faint); flex-shrink: 0; }
+
 @media (max-width: 900px) {
   .certificate-inner { grid-template-columns: 1fr; }
   .certificate-visual { position: static; }
@@ -264,4 +316,5 @@
   .download-hero-canvas-wrap { height: 280px; }
   .download-card-header { flex-wrap: wrap; }
   .install-steps-grid { grid-template-columns: 1fr; }
+  .older-version-row { flex-direction: column; align-items: flex-start; }
 }
