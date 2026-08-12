@@ -14,6 +14,7 @@ Player de vídeo e Live HLS para Windows, com navegação e recepção DLNA/UPnP
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6)
 [![Issues](https://img.shields.io/github/issues/ryan1235/player)](https://github.com/ryan1235/player/issues)
 [![Stars](https://img.shields.io/github/stars/ryan1235/player?style=social)](https://github.com/ryan1235/player/stargazers)
+[![License](https://img.shields.io/github/license/ryan1235/player?color=4f6df2)](LICENSE)
 
 <p>
   <a href="#download"><b>Download</b></a> ·
@@ -93,7 +94,9 @@ A forma mais simples é baixar o instalador pronto — nenhuma dependência exte
 
 </div>
 
-Requisitos: Windows 10/11 (64-bit). O instalador ainda não tem assinatura de código (certificado pago) — o Windows SmartScreen pode avisar na primeira execução; isso é esperado em projetos independentes recém-lançados, não é detecção de vírus (explicação completa na página de Download do site oficial, ver abaixo — ainda não publicada).
+Requisitos: Windows 10/11 (64-bit). O instalador ainda não tem assinatura de código — o Windows SmartScreen pode avisar na primeira execução; isso é esperado em projetos independentes recém-lançados, não é detecção de vírus (explicação completa na página de Download do site oficial, ver abaixo — ainda não publicada). Está em andamento uma aplicação pra assinatura gratuita via [SignPath Foundation](https://signpath.org/) (programa pra projetos open source).
+
+Pra conferir a integridade do instalador baixado, compare o hash SHA-512 dele com o publicado em `latest.yml` de cada [release](https://github.com/ryan1235/player/releases) (arquivo gerado automaticamente pelo electron-builder).
 
 Teve algum problema? A página de Suporte do site oficial cobre os erros mais comuns (instalação, reprodução, live, DLNA) — enquanto o site não é publicado, [abra uma issue](https://github.com/ryan1235/player/issues).
 
@@ -113,6 +116,14 @@ npm run dist
 ```
 
 Gera `dist/Aura Player Setup <versão>.exe` (NSIS), com o `mpv.exe` de `bin/` empacotado junto. Builds oficiais são gerados automaticamente pelo [workflow de release](.github/workflows/release.yml) a cada tag `v*.*.*`.
+
+#### Checklist de cada release (enquanto o instalador não é assinado)
+
+Sem assinatura de código, cada `.exe` publicado começa do zero em reputação — o Windows SmartScreen e antivírus tratam cada hash novo como desconhecido. Até a aplicação no SignPath Foundation ser aprovada, fazer isso a cada release ajuda a reduzir falso-positivo e dá pro usuário conferir por conta própria:
+
+1. Depois de `npm run dist`, escanear `dist/AuraPlayerSetup.exe` no [VirusTotal](https://www.virustotal.com/) e colar o link do resultado nas notas da release do GitHub.
+2. Submeter o mesmo `.exe` em [Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission) pra revisão manual (gratuito, reduz falso-positivo do Defender — não acelera o SmartScreen, que é reputação por download orgânico).
+3. Nunca substituir a falta de assinatura por um certificado autoassinado "de fachada" — o SmartScreen tende a tratar isso como sinal de evasão de malware, piorando a reputação em vez de ajudar.
 
 ### Site oficial
 
@@ -142,7 +153,7 @@ src/
   library.js             biblioteca local + geração de miniaturas
   watch-history.js       persistência de posição de reprodução
   settings.js            persistência de configurações
-  update-checker.js      checagem de atualização via GitHub Releases
+  auto-updater.js         auto-update real via electron-updater (baixa e instala sozinho, GitHub Releases)
   i18n.js                strings da interface (PT-BR / EN)
   index.html, renderer.js, styles.css        janela principal (UI)
   overlay.html, overlay-renderer.js, overlay.css   overlay transparente de controles sobre o vídeo
@@ -169,7 +180,7 @@ O projeto é código aberto e contribuições são bem-vindas. Abra uma issue an
 
 ## Licença
 
-Ainda não definida — será publicada aqui assim que decidida. Até lá, o software é distribuído gratuitamente, sem garantias.
+[GPL-3.0-or-later](LICENSE). Qualquer redistribuição (inclusive forks) precisa manter o código aberto sob a mesma licença — compatível com o [mpv](https://mpv.io/) (também GPL), que vem embutido no instalador.
 
 ## Créditos
 

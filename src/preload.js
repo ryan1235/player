@@ -91,4 +91,7 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdate: () => ipcRenderer.invoke('update:check'),
   setCheckUpdatesAutomatically: (value) => ipcRenderer.invoke('settings:set-check-updates', value),
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_evt, info) => cb(info)),
+  onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_evt, info) => cb(info)),
+  onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_evt, info) => cb(info)),
+  getVersionInfo: () => ipcRenderer.invoke('app:get-version-info'),
 });

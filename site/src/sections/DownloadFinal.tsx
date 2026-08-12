@@ -12,6 +12,7 @@ import { formatBytes } from '../utils/formatBytes';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useInView } from '../hooks/useInView';
 import { PARTICLE_COUNT, usePerformanceTier } from '../hooks/usePerformanceTier';
+import { useGitHubReleases } from '../hooks/useGitHubReleases';
 import './DownloadFinal.css';
 
 export function DownloadFinal() {
@@ -20,6 +21,13 @@ export function DownloadFinal() {
   const tier = usePerformanceTier();
   const { ref, inView } = useInView<HTMLDivElement>();
   const hasGithub = !!siteConfig.links.github;
+
+  // Mesmo padrao de pages/Download.tsx: versao/tamanho reais vem da API do
+  // GitHub, siteConfig so serve de fallback enquanto a API nao responde.
+  const { releases } = useGitHubReleases();
+  const latestRelease = releases[0] ?? null;
+  const displayVersion = latestRelease?.version || siteConfig.version;
+  const displaySizeBytes = latestRelease?.installerSizeBytes ?? siteConfig.installerSizeBytes;
 
   return (
     <section id="download" ref={ref} className="section download-final">
@@ -48,7 +56,7 @@ export function DownloadFinal() {
               <h3>{t('download.cardTitle')}</h3>
               <p>{t('download.cardSubtitle')}</p>
             </div>
-            <span className="version-badge">v{siteConfig.version}</span>
+            <span className="version-badge">v{displayVersion}</span>
           </div>
 
           <div className="download-card-meta">
@@ -58,7 +66,7 @@ export function DownloadFinal() {
             </div>
             <div className="meta-item">
               <IconDownload size={16} />
-              <span>{formatBytes(siteConfig.installerSizeBytes)}</span>
+              <span>{formatBytes(displaySizeBytes)}</span>
             </div>
             {siteConfig.mpvBundled && (
               <div className="meta-item meta-item-text">

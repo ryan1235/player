@@ -52,14 +52,26 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: aura-player-installer
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
           if-no-files-found: error
 
       # So publica Release de verdade quando o gatilho foi uma tag — rodar
       # via workflow_dispatch (teste manual) nunca publica nada.
+      #
+      # latest.yml e *.blockmap (gerados pelo electron-builder por causa do
+      # build.publish em package.json, mesmo sem publicar de fato pela rede)
+      # precisam ir junto do .exe pro auto-update funcionar (src/auto-updater.js,
+      # via electron-updater) — sem eles o app nunca sabe que ha versao nova
+      # nem onde baixar.
       - name: Publicar GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/latest.yml
+            dist/*.blockmap
           generate_release_notes: true

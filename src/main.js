@@ -7,9 +7,15 @@ const DlnaRenderer = require('./dlna-renderer');
 const WatchHistory = require('./watch-history');
 const Settings = require('./settings');
 const Library = require('./library');
-const { checkForUpdate } = require('./update-checker');
+const { checkForUpdates, setMainWindow } = require('./auto-updater');
 const logger = require('./services/logger');
 const packageJson = require('../package.json');
+let buildInfo;
+try {
+  buildInfo = require('./build-info.json');
+} catch {
+  buildInfo = { version: packageJson.version, commit: 'dev', commitShort: 'dev', buildDate: null };
+}
 
 // Impede que o app abra mais de uma vez ao mesmo tempo (rodar "electron ."
 // de novo sem fechar o anterior so foca a janela ja aberta, em vez de duplicar).
@@ -251,6 +257,7 @@ app.on('second-instance', () => {
 Menu.setApplicationMenu(null);
 app.whenReady().then(async () => {
   createWindows();
+  setMainWindow(mainWindow);
   startCursorActivityPoll();
 
   const savedFitId = settings.get('videoFitMode');
@@ -313,13 +320,7 @@ app.whenReady().then(async () => {
   startCastSupervisor();
 
   if (settings.get('checkUpdatesAutomatically')) {
-    checkForUpdate(packageJson.version)
-      .then((result) => {
-        if (result.configured && result.updateAvailable && mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('update:available', result);
-        }
-      })
-      .catch((err) => logger.network('[update-checker] falha na checagem automatica:', err.message));
+    checkForUpdates().catch((err) => logger.network('[auto-updater] falha na checagem automatica:', err.message));
   }
 });
 
@@ -542,17 +543,12 @@ ipcMain.handle('library:clear', () => {
   return library.getIndex();
 });
 
-ipcMain.handle('update:check', async () => {
-  try {
-    return await checkForUpdate(packageJson.version);
-  } catch (err) {
-    return { configured: true, error: err.message };
-  }
-});
+ipcMain.handle('update:check', () => checkForUpdates());
 ipcMain.handle('settings:set-check-updates', (_evt, value) => {
   settings.set('checkUpdatesAutomatically', !!value);
   return settings.getAll();
 });
+ipcMain.handle('app:get-version-info', () => buildInfo);
 
 ipcMain.on('player:set-video-rect', (_evt, rect) => {
   lastVideoRect = rect;

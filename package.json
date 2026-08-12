@@ -1,14 +1,19 @@
 {
   "name": "aura-player",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Aura Player - Um Player de Vídeo e Live HLS elegante e ultra-rápido.",
   "main": "src/main.js",
+  "author": "Ryan Luca",
+  "license": "GPL-3.0-or-later",
   "scripts": {
+    "prestart": "node scripts/write-build-info.js",
     "start": "electron .",
+    "predist": "node scripts/write-build-info.js",
     "dist": "electron-builder"
   },
   "dependencies": {
     "electron-is-dev": "^3.0.1",
+    "electron-updater": "^6.8.9",
     "fast-xml-parser": "^4.3.6",
     "koffi": "^3.1.4",
     "node-ssdp": "^4.0.1"
@@ -24,6 +29,13 @@
       "output": "dist",
       "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ryan1235",
+        "repo": "player"
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "build/icon.png"

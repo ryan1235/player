@@ -2,6 +2,10 @@ node_modules/
 dist/
 *.log
 
+# Gerado por scripts/write-build-info.js (prestart/predist) a cada build —
+# nunca fonte, sempre reflete o commit HEAD no momento do build.
+src/build-info.json
+
 # Binario do mpv embutido (bin/mpv.exe, ~120MB) — presente localmente pra
 # npm start/electron-builder empacotarem, mas nao versionado no git (binario
 # grande, redistribuivel, nao faz sentido inchar o historico do repo com

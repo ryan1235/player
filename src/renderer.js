@@ -920,6 +920,7 @@ loadLibrary();
 // --- Atualizações ---
 const checkUpdatesChk = document.getElementById('chk-check-updates');
 const updateStatusEl = document.getElementById('update-status');
+const appVersionInfoEl = document.getElementById('app-version-info');
 
 function renderUpdateResult(result) {
   if (!result.configured) {
@@ -933,20 +934,6 @@ function renderUpdateResult(result) {
   updateStatusEl.textContent = result.updateAvailable
     ? t('update.available', { version: result.latestVersion })
     : t('update.upToDate', { version: result.currentVersion });
-  if (result.updateAvailable && result.url) {
-    // <a target="_blank"> sem setWindowOpenHandler no main process e
-    // BLOQUEADO pelo Electron por padrao (nao abre nada, silenciosamente) —
-    // por isso passa por window.api.openExternal (shell.openExternal do SO)
-    // em vez de deixar o navegador nativo do link agir sozinho.
-    const link = document.createElement('a');
-    link.href = result.url;
-    link.textContent = t('update.viewOnGithub');
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.api.openExternal(result.url).catch(() => {});
-    });
-    updateStatusEl.appendChild(link);
-  }
 }
 
 document.getElementById('btn-check-updates').addEventListener('click', async () => {
@@ -962,7 +949,23 @@ checkUpdatesChk.addEventListener('change', () => {
   window.api.setCheckUpdatesAutomatically(checkUpdatesChk.checked).catch(() => {});
 });
 
+// O download acontece sozinho em segundo plano assim que uma versão nova é
+// detectada (autoUpdater.autoDownload=true no main) e a instalação acontece
+// sozinha ao reiniciar o app (autoInstallOnAppQuit=true) — essas telas são só
+// feedback visual do que já está rodando automaticamente, sem exigir clique.
 window.api.onUpdateAvailable((result) => renderUpdateResult(result));
+window.api.onUpdateProgress(({ percent }) => {
+  updateStatusEl.textContent = t('update.downloading', { percent: Math.round(percent || 0) });
+});
+window.api.onUpdateReady(({ latestVersion }) => {
+  updateStatusEl.textContent = t('update.readyToInstall', { version: latestVersion });
+});
+
+window.api.getVersionInfo()
+  .then((info) => {
+    appVersionInfoEl.textContent = t('geral.version.label', { version: info.version, commit: info.commitShort });
+  })
+  .catch(() => {});
 
 Promise.all([window.api.getSettings()])
   .then(([s]) => { checkUpdatesChk.checked = !!s.checkUpdatesAutomatically; })

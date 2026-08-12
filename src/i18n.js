@@ -225,12 +225,14 @@ const I18N = {
     'cast.status.active': 'Ativo como "{name}" em {ip}:{port} ({iface}). Já deve aparecer nos apps de cast do celular na mesma rede.',
     'cast.status.inactive': 'Desativado.',
 
-    'update.notConfigured': 'Checagem ainda não configurada (nenhum repositório definido).',
+    'update.notConfigured': 'Checagem de atualização disponível só no app instalado (não no modo desenvolvimento).',
     'update.error': 'Erro ao checar: {message}',
-    'update.available': 'Nova versão disponível: v{version}',
+    'update.available': 'Nova versão disponível: v{version} — baixando em segundo plano...',
     'update.upToDate': 'Você está na versão mais recente (v{version}).',
     'update.checking': 'Checando...',
-    'update.viewOnGithub': ' Ver no GitHub',
+    'update.downloading': 'Baixando atualização: {percent}%',
+    'update.readyToInstall': 'Atualização v{version} pronta — será instalada automaticamente ao reiniciar o app.',
+    'geral.version.label': 'Versão {version} ({commit})',
   },
   en: {
     'brand.tagline': 'Local video & DLNA',
@@ -452,12 +454,14 @@ const I18N = {
     'cast.status.active': 'Active as "{name}" at {ip}:{port} ({iface}). Should already appear in phone cast apps on the same network.',
     'cast.status.inactive': 'Off.',
 
-    'update.notConfigured': 'Update check not configured yet (no repository set).',
+    'update.notConfigured': 'Update check only available in the installed app (not in dev mode).',
     'update.error': 'Error checking: {message}',
-    'update.available': 'New version available: v{version}',
+    'update.available': 'New version available: v{version} — downloading in the background...',
     'update.upToDate': "You're on the latest version (v{version}).",
     'update.checking': 'Checking...',
-    'update.viewOnGithub': ' View on GitHub',
+    'update.downloading': 'Downloading update: {percent}%',
+    'update.readyToInstall': 'Update v{version} ready — will install automatically when the app restarts.',
+    'geral.version.label': 'Version {version} ({commit})',
   },
 };
 
