@@ -1,0 +1,65 @@
+name: Build and release Windows installer
+
+# Dispara em duas situacoes:
+#   1. push de uma tag "v*.*.*" (ex.: v1.0.0) -> builda E publica um Release
+#      no GitHub com o instalador anexado como asset.
+#   2. manualmente, via aba Actions > Run workflow -> so builda e disponibiliza
+#      o instalador como artifact de build (sem criar Release), util pra
+#      testar o pipeline sem publicar nada.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias do app
+        run: npm ci
+
+      # bin/mpv.exe (~120MB, binario) NAO fica no git (ver .gitignore) —
+      # precisa existir localmente so pra empacotar junto no instalador
+      # (ver src/mpv.js: resolveMpvBinary() usa SO bin/mpv.exe, sem
+      # fallback pro mpv do sistema). Aqui buscamos via winget, a mesma
+      # fonte que o README ja recomenda pros usuarios.
+      - name: Baixar mpv (embutido no instalador)
+        shell: pwsh
+        run: |
+          winget install --id mpv.mpv -e --silent --accept-package-agreements --accept-source-agreements
+          $mpvExe = Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter "mpv.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $mpvExe) {
+            Write-Error "mpv.exe nao encontrado apos 'winget install' — o instalador NAO pode ser gerado sem ele (ver src/mpv.js, resolveMpvBinary nao tem fallback)."
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Copy-Item $mpvExe.FullName "bin\mpv.exe" -Force
+          Write-Host "mpv.exe copiado de $($mpvExe.FullName) ($('{0:N1}' -f ((Get-Item bin\mpv.exe).Length / 1MB)) MB)"
+
+      - name: Gerar instalador (electron-builder)
+        run: npm run dist
+
+      - name: Anexar instalador como artifact do build
+        uses: actions/upload-artifact@v4
+        with:
+          name: aura-player-installer
+          path: dist/*.exe
+          if-no-files-found: error
+
+      # So publica Release de verdade quando o gatilho foi uma tag — rodar
+      # via workflow_dispatch (teste manual) nunca publica nada.
+      - name: Publicar GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true

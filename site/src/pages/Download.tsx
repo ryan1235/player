@@ -82,11 +82,12 @@ export function Download() {
                   <IconDownload size={16} />
                   <span>{formatBytes(siteConfig.installerSizeBytes)}</span>
                 </div>
-                <div className="meta-item meta-item-text">
-                  <span>
-                    {t('common.requires')}: {siteConfig.requirements.dependency}
-                  </span>
-                </div>
+                {siteConfig.mpvBundled && (
+                  <div className="meta-item meta-item-text">
+                    <IconCheckCircle size={16} />
+                    <span>{t('common.mpvBundled')}</span>
+                  </div>
+                )}
               </div>
 
               <div className="terms-block">

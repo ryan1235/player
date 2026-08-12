@@ -2,7 +2,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import { RevealOnScroll } from '../components/ui/RevealOnScroll';
 import { DownloadButton } from '../components/ui/DownloadButton';
 import { StepCard } from '../components/ui/StepCard';
-import { IconWindows, IconDownload, IconAlertTriangle } from '../components/ui/icons';
+import { IconWindows, IconDownload, IconAlertTriangle, IconCheckCircle } from '../components/ui/icons';
 import { SceneCanvas } from '../components/three/SceneCanvas';
 import { SceneLights } from '../components/three/SceneLights';
 import { DownloadObject } from '../components/three/DownloadObject';
@@ -60,9 +60,12 @@ export function DownloadFinal() {
               <IconDownload size={16} />
               <span>{formatBytes(siteConfig.installerSizeBytes)}</span>
             </div>
-            <div className="meta-item meta-item-text">
-              <span>{t('common.requires')}: {siteConfig.requirements.dependency}</span>
-            </div>
+            {siteConfig.mpvBundled && (
+              <div className="meta-item meta-item-text">
+                <IconCheckCircle size={16} />
+                <span>{t('common.mpvBundled')}</span>
+              </div>
+            )}
           </div>
 
           <div className="download-card-cta">

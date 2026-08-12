@@ -513,6 +513,11 @@ try {
   // informativo apenas — segue sem quebrar a tela de Configurações
 }
 
+const GITHUB_REPO_URL = 'https://github.com/ryan1235/player';
+document.getElementById('btn-open-github').addEventListener('click', () => {
+  window.api.openExternal(GITHUB_REPO_URL).catch(() => {});
+});
+
 // --- Configurações: DLNA (tempo de descoberta, reconexão automática) ---
 const discoveryTimeoutSelect = document.getElementById('sel-discovery-timeout');
 discoveryTimeoutSelect.addEventListener('change', () => {
@@ -929,11 +934,17 @@ function renderUpdateResult(result) {
     ? t('update.available', { version: result.latestVersion })
     : t('update.upToDate', { version: result.currentVersion });
   if (result.updateAvailable && result.url) {
+    // <a target="_blank"> sem setWindowOpenHandler no main process e
+    // BLOQUEADO pelo Electron por padrao (nao abre nada, silenciosamente) —
+    // por isso passa por window.api.openExternal (shell.openExternal do SO)
+    // em vez de deixar o navegador nativo do link agir sozinho.
     const link = document.createElement('a');
     link.href = result.url;
     link.textContent = t('update.viewOnGithub');
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.api.openExternal(result.url).catch(() => {});
+    });
     updateStatusEl.appendChild(link);
   }
 }

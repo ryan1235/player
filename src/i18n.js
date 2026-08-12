@@ -185,6 +185,9 @@ const I18N = {
     'sobre.version': 'Versão',
     'sobre.videoEngine': 'Motor de vídeo',
     'sobre.electron': 'Electron',
+    'sobre.github.title': 'Código-fonte',
+    'sobre.github.hint': 'Projeto de código aberto — veja o código, releases e reporte problemas.',
+    'sobre.github.button': 'Ver no GitHub',
 
     'logs.modal.title': 'Logs da sessão',
     'logs.modal.refresh': 'Atualizar',
@@ -409,6 +412,9 @@ const I18N = {
     'sobre.version': 'Version',
     'sobre.videoEngine': 'Video engine',
     'sobre.electron': 'Electron',
+    'sobre.github.title': 'Source code',
+    'sobre.github.hint': 'Open source project — see the code, releases and report issues.',
+    'sobre.github.button': 'View on GitHub',
 
     'logs.modal.title': 'Session logs',
     'logs.modal.refresh': 'Refresh',

@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('api', {
   // Logs (Configurações > Avançado)
   getLogs: () => ipcRenderer.invoke('logs:get'),
   getMpvInfo: () => ipcRenderer.invoke('system:get-mpv-info'),
+  openExternal: (url) => ipcRenderer.invoke('shell:open-external', url),
 
   // Biblioteca
   getLibrary: () => ipcRenderer.invoke('library:get'),

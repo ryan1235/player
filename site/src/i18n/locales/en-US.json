@@ -35,8 +35,8 @@
   "download.steps.step1.body": "A single .exe file, no hidden dependencies.",
   "download.steps.step2.title": "Run it and pick a folder",
   "download.steps.step2.body": "The installer lets you choose where to install — nothing happens without asking.",
-  "download.steps.step3.title": "Install mpv and open it",
-  "download.steps.step3.body": "You need mpv on your PATH (winget install mpv.mpv) — then just open Aura Player.",
+  "download.steps.step3.title": "Open it and watch",
+  "download.steps.step3.body": "Nothing else to install — mpv (the playback engine) is already bundled with the installer.",
   "download.unsigned.title": "The installer isn't digitally signed yet",
   "download.unsigned.body": "That's why Windows SmartScreen may show a warning the first time you run it. Click \"More info\" → \"Run anyway\". We'd rather be upfront about it than hide it.",
 
@@ -144,7 +144,7 @@
   "footer.madeBySuffix": " team.",
 
   "common.comingSoon": "Coming soon",
-  "common.requires": "Requires",
+  "common.mpvBundled": "mpv bundled with the installer — nothing else to install",
 
   "nav.support": "Support",
 
@@ -177,7 +177,7 @@
   "download.terms.hide": "Collapse the terms",
   "download.terms.checkboxLabel": "I have read and agree to Aura Player's Terms of Use.",
   "download.terms.checkboxHint": "Check the box above to unlock the download.",
-  "download.terms.body": "1. About the software\nAura Player is free software, provided \"as is\", without warranties of any kind, express or implied. By installing and using the app, you agree to these terms.\n\n2. License to use\nYou may install and use Aura Player freely, for personal or commercial purposes, on as many computers as you like. The project is expected to become open source — once that happens, the source code license terms will be published alongside the repository.\n\n3. No warranties\nThe developer does not guarantee the software will be error-free or run without interruption. Use is at your own risk. Under no circumstances will the developer be liable for direct or indirect damages arising from use of the app.\n\n4. Content you play\nAura Player is a media player — it does not host, distribute, or take any responsibility for the content you choose to open, whether a local file, a DLNA server on your network, or a live stream. You are solely responsible for having the rights to whatever you play.\n\n5. Privacy\nAura Player does not collect, store, or send personal data to external servers. The only network connection made by the app itself (outside of playback) is an optional update check against GitHub, which can be turned off in Settings. \"Receive\" mode (DLNA) only opens ports on your local network, to let your own devices send media to the PC.\n\n6. Third-party requirement (mpv)\nAura Player relies on the mpv player (free software, under its own license) to function. It is downloaded/installed separately, as instructed during setup.\n\n7. Changes\nThese terms may be updated in future versions of the app or site. The version in effect is always the one published on this page.",
+  "download.terms.body": "1. About the software\nAura Player is free software, provided \"as is\", without warranties of any kind, express or implied. By installing and using the app, you agree to these terms.\n\n2. License to use\nYou may install and use Aura Player freely, for personal or commercial purposes, on as many computers as you like. The project is expected to become open source — once that happens, the source code license terms will be published alongside the repository.\n\n3. No warranties\nThe developer does not guarantee the software will be error-free or run without interruption. Use is at your own risk. Under no circumstances will the developer be liable for direct or indirect damages arising from use of the app.\n\n4. Content you play\nAura Player is a media player — it does not host, distribute, or take any responsibility for the content you choose to open, whether a local file, a DLNA server on your network, or a live stream. You are solely responsible for having the rights to whatever you play.\n\n5. Privacy\nAura Player does not collect, store, or send personal data to external servers. The only network connection made by the app itself (outside of playback) is an optional update check against GitHub, which can be turned off in Settings. \"Receive\" mode (DLNA) only opens ports on your local network, to let your own devices send media to the PC.\n\n6. Third-party component (mpv)\nAura Player uses the mpv player (free software, under its own license) internally to play video. It's already bundled with the installer — there's nothing to download or install separately.\n\n7. Changes\nThese terms may be updated in future versions of the app or site. The version in effect is always the one published on this page.",
   "download.terms.acceptedNote": "By clicking download, you confirm you've read and agree to the terms above.",
 
   "support.eyebrow": "Help center",
@@ -196,7 +196,7 @@
   "support.i2.question": "\"Windows protected your PC\" when trying to install",
   "support.i2.answer": "Expected for an installer that doesn't have a paid digital signature yet. Click \"More info\" and then \"Run anyway\". See the full explanation (what the certificate is, why this happens) on the Download page.",
   "support.i3.question": "\"Could not connect to mpv\"",
-  "support.i3.answer": "Aura Player relies on the mpv player to work. This message shows up when it can't be found — usually because an antivirus removed the app's bundled copy, or a separate mpv install the app expected to use is no longer on the system PATH. Reinstalling Aura Player usually fixes it.",
+  "support.i3.answer": "Aura Player uses mpv (bundled with the installer itself) to play video. This message shows up when that bundled file can't be found — almost always because an antivirus removed or quarantined that part of the app. Check your antivirus quarantine and reinstall Aura Player.",
 
   "support.p1.question": "The screen stays black, but audio plays normally",
   "support.p1.answer": "Video is rendered in a native window embedded inside the app window — in rare cases (outdated GPU drivers, or switching apps with Alt+Tab) that window can fail to redraw correctly. Try switching to another app and back; if it persists, update your video driver or restart Aura Player.",

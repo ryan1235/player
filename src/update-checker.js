@@ -1,11 +1,11 @@
-// Checagem de atualizacao via GitHub Releases. So funciona depois que
-// GITHUB_REPO for preenchido (formato "usuario/nome") com o repositorio onde
-// os builds do Aura Player passarem a ser publicados — enquanto estiver
-// vazio, checkForUpdate() responde de forma honesta que a checagem nao esta
-// configurada, em vez de fingir que verificou algo.
+// Checagem de atualizacao via GitHub Releases. Repositorio real e publico
+// (releases publicados automaticamente por .github/workflows/release.yml a
+// cada tag v*.*.* enviada) — enquanto nenhum release existir ainda, a API
+// do GitHub responde 404 e checkForUpdate() propaga isso como erro comum
+// (capturado por quem chama, ver main.js), nao como crash.
 const https = require('https');
 
-const GITHUB_REPO = ''; // ex.: 'seu-usuario/aura-player'
+const GITHUB_REPO = 'ryan1235/player';
 
 function fetchLatestRelease(repo) {
   return new Promise((resolve, reject) => {
@@ -21,7 +21,14 @@ function fetchLatestRelease(repo) {
       (res) => {
         if (res.statusCode !== 200) {
           res.resume();
-          reject(new Error(`GitHub respondeu ${res.statusCode}`));
+          // 404 quase sempre significa "nenhum release publicado ainda" (repo
+          // real mas .github/workflows/release.yml nunca rodou ou nenhuma tag
+          // foi enviada) — mensagem mais clara que um "GitHub respondeu 404"
+          // cru, que nao diz nada pro usuario final.
+          const message = res.statusCode === 404
+            ? 'Nenhuma versão publicada ainda neste repositório.'
+            : `GitHub respondeu ${res.statusCode}`;
+          reject(new Error(message));
           return;
         }
         let body = '';

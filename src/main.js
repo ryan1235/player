@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const MPVPlayer = require('./mpv');
@@ -511,6 +511,18 @@ ipcMain.handle('history:remove', (_evt, target) => {
 
 ipcMain.handle('logs:get', () => logger.getBuffer());
 ipcMain.handle('system:get-mpv-info', () => MPVPlayer.getMpvInfo());
+
+// Abre um link externo no navegador padrao do usuario (nao dentro do app).
+// So https:// — o renderer roda com contextIsolation, mas validar aqui e
+// barato e evita que qualquer valor inesperado chegue no shell.openExternal
+// do SO. Necessario porque BrowserWindow, por padrao, BLOQUEIA
+// target="_blank"/window.open() sem um setWindowOpenHandler configurado —
+// sem isso, um <a target="_blank"> clicado simplesmente nao fazia nada.
+ipcMain.handle('shell:open-external', (_evt, url) => {
+  if (typeof url !== 'string' || !/^https:\/\//i.test(url)) return false;
+  shell.openExternal(url);
+  return true;
+});
 
 ipcMain.handle('library:get', () => library.getIndex());
 ipcMain.handle('library:pick-folder', async () => {

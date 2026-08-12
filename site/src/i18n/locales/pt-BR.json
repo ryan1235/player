@@ -35,8 +35,8 @@
   "download.steps.step1.body": "Um único arquivo .exe, sem dependências escondidas.",
   "download.steps.step2.title": "Execute e escolha a pasta",
   "download.steps.step2.body": "O instalador deixa você escolher onde instalar — nada é feito sem avisar.",
-  "download.steps.step3.title": "Instale o mpv e abra",
-  "download.steps.step3.body": "É preciso ter o mpv no PATH (winget install mpv.mpv) — depois é só abrir o Aura Player.",
+  "download.steps.step3.title": "Abra e assista",
+  "download.steps.step3.body": "Nada mais para instalar — o mpv (motor de reprodução) já vem embutido no instalador.",
   "download.unsigned.title": "O instalador ainda não é assinado digitalmente",
   "download.unsigned.body": "Por isso o Windows SmartScreen pode mostrar um aviso na primeira execução. Clique em \"Mais informações\" → \"Executar assim mesmo\". Preferimos ser transparentes sobre isso a esconder.",
 
@@ -144,7 +144,7 @@
   "footer.madeBySuffix": ".",
 
   "common.comingSoon": "Em breve",
-  "common.requires": "Requer",
+  "common.mpvBundled": "mpv incluído no instalador — nada para instalar à parte",
 
   "nav.support": "Suporte",
 
@@ -177,7 +177,7 @@
   "download.terms.hide": "Recolher os termos",
   "download.terms.checkboxLabel": "Li e aceito os Termos de Uso do Aura Player.",
   "download.terms.checkboxHint": "Marque a caixa acima para liberar o download.",
-  "download.terms.body": "1. Sobre o software\nO Aura Player é um software gratuito, fornecido \"como está\", sem garantias de qualquer tipo, expressas ou implícitas. Ao instalar e usar o aplicativo, você concorda com estes termos.\n\n2. Licença de uso\nVocê pode instalar e usar o Aura Player livremente, para fins pessoais ou comerciais, em quantos computadores quiser. O projeto tem previsão de se tornar código aberto — quando isso acontecer, os termos da licença de código-fonte serão publicados junto ao repositório.\n\n3. Sem garantias\nO desenvolvedor não garante que o software estará livre de erros ou funcionará sem interrupção. O uso é por sua conta e risco. Em nenhuma hipótese o desenvolvedor será responsável por danos diretos ou indiretos decorrentes do uso do aplicativo.\n\n4. Conteúdo reproduzido\nO Aura Player é um reprodutor de mídia — ele não hospeda, distribui nem tem qualquer responsabilidade sobre o conteúdo que você escolhe abrir, seja um arquivo local, um servidor DLNA da sua rede ou uma transmissão ao vivo. Você é o único responsável por ter os direitos sobre o que reproduz.\n\n5. Privacidade\nO Aura Player não coleta, armazena nem envia dados pessoais para servidores externos. A única conexão de rede feita pelo próprio aplicativo (fora da reprodução em si) é uma checagem opcional de atualização junto ao GitHub, que pode ser desativada nas Configurações. O modo \"Receber\" (DLNA) abre portas apenas na sua rede local, para permitir que outros dispositivos seus enviem mídia para o PC.\n\n6. Requisito de terceiros (mpv)\nO Aura Player depende do reprodutor mpv (software livre, licença própria) para funcionar. Ele é baixado/instalado separadamente, conforme instruído durante a instalação.\n\n7. Alterações\nEstes termos podem ser atualizados em versões futuras do aplicativo ou do site. A versão vigente é sempre a publicada nesta página.",
+  "download.terms.body": "1. Sobre o software\nO Aura Player é um software gratuito, fornecido \"como está\", sem garantias de qualquer tipo, expressas ou implícitas. Ao instalar e usar o aplicativo, você concorda com estes termos.\n\n2. Licença de uso\nVocê pode instalar e usar o Aura Player livremente, para fins pessoais ou comerciais, em quantos computadores quiser. O projeto tem previsão de se tornar código aberto — quando isso acontecer, os termos da licença de código-fonte serão publicados junto ao repositório.\n\n3. Sem garantias\nO desenvolvedor não garante que o software estará livre de erros ou funcionará sem interrupção. O uso é por sua conta e risco. Em nenhuma hipótese o desenvolvedor será responsável por danos diretos ou indiretos decorrentes do uso do aplicativo.\n\n4. Conteúdo reproduzido\nO Aura Player é um reprodutor de mídia — ele não hospeda, distribui nem tem qualquer responsabilidade sobre o conteúdo que você escolhe abrir, seja um arquivo local, um servidor DLNA da sua rede ou uma transmissão ao vivo. Você é o único responsável por ter os direitos sobre o que reproduz.\n\n5. Privacidade\nO Aura Player não coleta, armazena nem envia dados pessoais para servidores externos. A única conexão de rede feita pelo próprio aplicativo (fora da reprodução em si) é uma checagem opcional de atualização junto ao GitHub, que pode ser desativada nas Configurações. O modo \"Receber\" (DLNA) abre portas apenas na sua rede local, para permitir que outros dispositivos seus enviem mídia para o PC.\n\n6. Componente de terceiros (mpv)\nO Aura Player usa o reprodutor mpv (software livre, licença própria) internamente para reproduzir vídeo. Ele já vem embutido no instalador — não é preciso baixar nem instalar nada separadamente.\n\n7. Alterações\nEstes termos podem ser atualizados em versões futuras do aplicativo ou do site. A versão vigente é sempre a publicada nesta página.",
   "download.terms.acceptedNote": "Ao clicar em baixar, você confirma que leu e concorda com os termos acima.",
 
   "support.eyebrow": "Central de ajuda",
@@ -196,7 +196,7 @@
   "support.i2.question": "\"O Windows protegeu o computador\" ao tentar instalar",
   "support.i2.answer": "Esperado em um instalador ainda sem certificado de assinatura digital paga. Clique em \"Mais informações\" e depois em \"Executar assim mesmo\". Veja a explicação completa (o que é o certificado, por que isso acontece) na página de Download.",
   "support.i3.question": "\"Não foi possível conectar ao mpv\"",
-  "support.i3.answer": "O Aura Player depende do reprodutor mpv para funcionar. Essa mensagem aparece quando ele não foi encontrado — normalmente porque um antivírus removeu o arquivo embutido do app, ou uma instalação separada do mpv que o app esperava usar não está mais no PATH do sistema. Reinstalar o Aura Player costuma resolver.",
+  "support.i3.answer": "O Aura Player usa o mpv (embutido no próprio instalador) para reproduzir vídeo. Essa mensagem aparece quando esse arquivo embutido não foi encontrado — quase sempre porque um antivírus removeu ou colocou em quarentena essa parte do app. Verifique a quarentena do antivírus e reinstale o Aura Player.",
 
   "support.p1.question": "A tela fica preta, mas o áudio toca normalmente",
   "support.p1.answer": "O vídeo é renderizado numa janela nativa embutida na janela do app — em raras situações (drivers de GPU desatualizados, ou alternar de aplicativo com Alt+Tab) essa janela pode não redesenhar corretamente. Tente alternar para outro app e voltar; se persistir, atualize o driver de vídeo ou reinicie o Aura Player.",

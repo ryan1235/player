@@ -22,29 +22,42 @@ export const siteConfig = {
     url: 'https://archipixel.com.br/',
   },
 
-  // O projeto vai ser publicado como codigo aberto — o link do repositorio
-  // ainda nao existe (preencha `links.github` quando publicar), mas a
-  // intencao ja e real e vale comunicar no site.
+  // O projeto vai ser publicado como codigo aberto — repositorio real
+  // (ver links.github abaixo), publicado no GitHub.
   openSource: true,
 
-  // Preencha quando o repositorio for criado e/ou um release publicado —
-  // ate la a UI mostra "em breve" honestamente, sem link quebrado nem falso.
+  // Release v1.0.0 publicado de verdade — asset real, conferido na API do
+  // GitHub antes de colar aqui (nao confirmado se foi via
+  // .github/workflows/release.yml ou upload manual do build local).
+  //
+  // A partir da PROXIMA release (build gerado depois do artifactName fixo
+  // "AuraPlayerSetup.exe" em package.json > build.nsis), da pra trocar essa
+  // URL pela versao "latest" abaixo — ela sempre aponta pro asset da
+  // release mais recente, sem precisar editar isso de novo a cada versao:
+  //   https://github.com/ryan1235/player/releases/latest/download/AuraPlayerSetup.exe
+  // v1.0.0 ainda usa o nome antigo (com versao no arquivo), entao por
+  // enquanto o link fica fixo nela.
   links: {
-    github: null as string | null,
-    releaseDownloadWindows: null as string | null,
+    github: 'https://github.com/ryan1235/player' as string | null,
+    releaseDownloadWindows: 'https://github.com/ryan1235/player/releases/download/v1.0.0/Aura.Player.Setup.1.0.0.exe' as string | null,
     documentation: null as string | null,
   },
 
   requirements: {
     os: 'Windows 10/11 (64-bit)',
-    // README do app: precisa do mpv instalado e no PATH.
-    dependency: 'mpv (winget install mpv.mpv)',
   },
 
-  // Tamanho real do instalador NSIS gerado localmente (player/dist/Aura
-  // Player Setup 1.0.0.exe, `npm run dist` no projeto do app) — nao e uma
-  // estimativa. Atualize se rebuildar o instalador e o tamanho mudar.
-  installerSizeBytes: 91917564,
+  // mpv agora vem EMBUTIDO no instalador (bin/mpv.exe, travado como unica
+  // fonte em resolveMpvBinary() — ver src/mpv.js do app) — nao precisa mais
+  // ser instalado separadamente. Mantido aqui em vez de hardcoded no JSX
+  // porque e um fato sobre o produto, nao so texto de UI.
+  mpvBundled: true,
+
+  // Tamanho real do asset publicado no release v1.0.0 (conferido via API do
+  // GitHub, nao e estimativa) — pode divergir por poucos bytes de um build
+  // local por causa de timestamps do NSIS, sem significado pratico.
+  // Atualize a cada novo release publicado.
+  installerSizeBytes: 160360421,
 
   // O build do electron-builder atual nao tem certificado de assinatura de
   // codigo configurado (sem `certificateFile` em package.json > build) —

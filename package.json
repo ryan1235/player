@@ -1,7 +1,7 @@
 {
   "name": "aura-player",
   "version": "1.0.0",
-  "description": "Aura Player - Um Player de V�deo e Live HLS elegante e ultra-r�pido.",
+  "description": "Aura Player - Um Player de Vídeo e Live HLS elegante e ultra-rápido.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -30,7 +30,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "AuraPlayerSetup.exe"
     },
     "asar": true,
     "asarUnpack": [
