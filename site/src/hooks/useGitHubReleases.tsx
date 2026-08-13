@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 // Le os releases publicados direto da API publica do GitHub, no navegador
 // do visitante — sem backend proprio, sem precisar editar site.config.ts a
@@ -75,7 +75,17 @@ async function fetchReleases(): Promise<GitHubRelease[]> {
 // releases=[], quem usa o hook deve continuar mostrando os valores
 // estaticos de siteConfig ate os dados reais chegarem (ou falharem) — troca
 // suave, sem tela de carregamento bloqueante.
-export function useGitHubReleases(): GitHubReleasesState {
+//
+// Contexto em vez de cada componente chamando o hook direto: DownloadStrip,
+// DownloadFinal e a pagina /download podem estar montados ao mesmo tempo
+// (Trust/DownloadStrip e DownloadFinal na home, por exemplo) — sem
+// compartilhar o resultado, cada um disparava sua propria busca contra a
+// API do GitHub (nao-autenticada, limite de 60 req/hora/IP), desperdicando
+// chamadas com o mesmo resultado. Uma unica busca no provider, consumida por
+// todo mundo via useGitHubReleases().
+const GitHubReleasesContext = createContext<GitHubReleasesState | null>(null);
+
+export function GitHubReleasesProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GitHubReleasesState>({ releases: [], loading: true, error: false });
 
   useEffect(() => {
@@ -94,5 +104,11 @@ export function useGitHubReleases(): GitHubReleasesState {
     };
   }, []);
 
-  return state;
+  return <GitHubReleasesContext.Provider value={state}>{children}</GitHubReleasesContext.Provider>;
+}
+
+export function useGitHubReleases(): GitHubReleasesState {
+  const ctx = useContext(GitHubReleasesContext);
+  if (!ctx) throw new Error('useGitHubReleases deve ser usado dentro de <GitHubReleasesProvider>');
+  return ctx;
 }

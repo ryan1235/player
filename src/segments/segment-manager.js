@@ -198,13 +198,21 @@ class SegmentManager extends EventEmitter {
         }
 
         if (bestMatch.confidence >= 0.85) {
+          // Ja existe um segmento igual (mesmo nome+tipo) neste video? O scan
+          // roda de novo a cada load, inclusive replays do mesmo video ja
+          // escaneado antes — sem essa checagem, cada replay inseria outro
+          // "Auto-detectado" idêntico por cima do anterior.
+          const alreadyDetected = this.storage.getSegments(this.currentVideoId)
+            .some((s) => s.name === sig.name && s.type === sig.type);
+          if (alreadyDetected) continue;
+
           // Detecao positiva!
           const sigMusicDuration = (sig.endTime - (sig.musicEndOffset||0)) - (sig.startTime + (sig.musicStartOffset||0));
           const newStart = matchBaseTime + bestMatch.matchTimeOffset - (sig.musicStartOffset || 0);
           const newEnd = newStart + (sig.endTime - sig.startTime);
-          
+
           console.log(`[Segments] Auto-detectado: ${sig.name} (Conf: ${bestMatch.confidence.toFixed(2)}) em ${newStart}s`);
-          
+
           // Adiciona ao video atual silenciosamente
           this.storage.addSegment(this.currentVideoId, "Auto-detectado", this.currentDuration, {
             name: sig.name,

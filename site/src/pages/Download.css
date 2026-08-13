@@ -61,6 +61,10 @@
   font-weight: 700;
 }
 
+.version-badge .older-version-badge {
+  margin-left: 6px;
+}
+
 .download-card-meta {
   display: flex;
   flex-wrap: wrap;

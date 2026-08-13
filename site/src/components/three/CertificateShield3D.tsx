@@ -8,6 +8,7 @@ interface CertificateShield3DProps {
   position?: [number, number, number];
   scale?: number;
   float?: boolean;
+  reducedMotion?: boolean;
 }
 
 // Escudo com um "X" flutuando na frente — pra secao de "o que e um
@@ -28,7 +29,7 @@ function buildShieldShape(): THREE.Shape {
   return shape;
 }
 
-export function CertificateShield3D({ position = [0, 0, 0], scale = 1, float = true }: CertificateShield3DProps) {
+export function CertificateShield3D({ position = [0, 0, 0], scale = 1, float = true, reducedMotion = false }: CertificateShield3DProps) {
   const glowRef = useRef<Mesh>(null);
 
   const shieldGeometry = useMemo(() => {
@@ -46,7 +47,7 @@ export function CertificateShield3D({ position = [0, 0, 0], scale = 1, float = t
   }, []);
 
   useFrame(({ clock }) => {
-    if (!glowRef.current) return;
+    if (reducedMotion || !glowRef.current) return;
     const mat = glowRef.current.material as THREE.MeshBasicMaterial;
     mat.opacity = 0.08 + Math.sin(clock.elapsedTime * 1.4) * 0.03;
   });
@@ -81,7 +82,7 @@ export function CertificateShield3D({ position = [0, 0, 0], scale = 1, float = t
     </group>
   );
 
-  if (!float) return content;
+  if (!float || reducedMotion) return content;
   return (
     <Float speed={0.85} rotationIntensity={0.35} floatIntensity={0.6}>
       {content}

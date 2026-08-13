@@ -21,6 +21,21 @@ function escapeXml(str) {
   return String(str).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 }
 
+// SetAVTransportURI vem de qualquer dispositivo na rede, sem autenticacao
+// (assim funciona DLNA) — CurrentURI/subtitleUrl so podem ser http(s). Um
+// caminho UNC (\\host\share\arquivo) ou file:// repassado sem checagem pro
+// mpv faria o Windows tentar autenticar via SMB no host indicado, vazando o
+// hash NTLM do usuario logado ("UNC path injection").
+function isSafeMediaUrl(url) {
+  if (typeof url !== 'string' || !url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 const VIRTUAL_ADAPTER_RE = /radmin|hamachi|vpn|tap-|tun|virtualbox|vmware|tailscale|zerotier|wsl|hyper-v|npcap|loopback/i;
 
 function rankAddress(address) {
@@ -312,6 +327,11 @@ class DlnaRenderer extends EventEmitter {
     this.httpServer = null;
     this.ssdpServer = null;
     this.port = null;
+    // true so quando o servidor HTTP cai sozinho depois de start() ja ter
+    // resolvido (ver o listener 'error' registrado la embaixo) — distingue
+    // de um stop() deliberado, que zera isso, pra o cast-supervisor em
+    // main.js saber que deve tentar reiniciar em vez de so ficar quieto.
+    this._crashed = false;
     const iface = getLocalInterface();
     this.ip = iface.address;
     this.interfaceName = iface.name;
@@ -338,6 +358,7 @@ class DlnaRenderer extends EventEmitter {
   getStatus() {
     return {
       active: !!this.httpServer,
+      crashed: this._crashed,
       friendlyName: this.friendlyName,
       ip: this.ip,
       interfaceName: this.interfaceName,
@@ -349,6 +370,7 @@ class DlnaRenderer extends EventEmitter {
 
   async start(preferredInterface) {
     if (this.httpServer) return this.getStatus();
+    this._crashed = false;
     const iface = getLocalInterface(preferredInterface);
     this.ip = iface.address;
     this.interfaceName = iface.name;
@@ -359,6 +381,18 @@ class DlnaRenderer extends EventEmitter {
       this.httpServer.on('error', reject);
       this.httpServer.listen(0, () => {
         this.port = this.httpServer.address().port;
+        // O listener acima (que rejeita a promise de start) so cobre erro
+        // ANTES do listen resolver. Depois disso, sem um listener novo,
+        // qualquer erro do servidor (porta derrubada, etc.) era engolido em
+        // silencio — getStatus().active continuava true pra sempre.
+        this.httpServer.removeAllListeners('error');
+        this.httpServer.on('error', (err) => {
+          logger.network('[dlna-renderer] servidor HTTP do modo Receber caiu:', err.message);
+          this._crashed = true;
+          this.httpServer = null;
+          this.port = null;
+          this.emit('crashed', err);
+        });
         resolve();
       });
     });
@@ -384,6 +418,7 @@ class DlnaRenderer extends EventEmitter {
   }
 
   async stop() {
+    this._crashed = false;
     if (this.ssdpServer) {
       this.ssdpServer.stop();
       this.ssdpServer = null;
@@ -536,7 +571,12 @@ class DlnaRenderer extends EventEmitter {
     if (serviceType === AVTRANSPORT_TYPE) {
       switch (action) {
         case 'SetAVTransportURI': {
-          this.currentUri = args.CurrentURI || '';
+          const requestedUri = args.CurrentURI || '';
+          if (!isSafeMediaUrl(requestedUri)) {
+            logger.network(`[dlna] SetAVTransportURI de ${remote} rejeitado (esquema nao http/https): ${requestedUri}`);
+            throw new Error('CurrentURI precisa ser http:// ou https://');
+          }
+          this.currentUri = requestedUri;
           const { title, subtitleUrl } = parseDidlMetadata(args.CurrentURIMetaData);
           // Debug temporario: log completo do que o celular manda, pra
           // entender o formato real (upnp:class, protocolInfo, duration
@@ -553,7 +593,7 @@ class DlnaRenderer extends EventEmitter {
           player
             .loadFile(this.currentUri)
             .then(() => {
-              if (subtitleUrl) player.command(['sub-add', subtitleUrl, 'select']).catch(() => {});
+              if (subtitleUrl && isSafeMediaUrl(subtitleUrl)) player.command(['sub-add', subtitleUrl, 'select']).catch(() => {});
             })
             .catch((err) => console.error('[dlna] erro no loadFile', err));
           return {};

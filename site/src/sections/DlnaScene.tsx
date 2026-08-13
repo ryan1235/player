@@ -11,7 +11,7 @@ export function DlnaScene() {
   const { t } = useI18n();
   const reducedMotion = useReducedMotion();
   const tier = usePerformanceTier();
-  const { ref, inView } = useInView<HTMLDivElement>();
+  const { ref, inView, isVisible } = useInView<HTMLDivElement>();
 
   return (
     <section className="section dlna-scene-section">
@@ -24,7 +24,7 @@ export function DlnaScene() {
 
         <div ref={ref} className="dlna-scene-canvas-wrap">
           {inView && (
-            <SceneCanvas camera={{ position: [0, 0.1, 8.5], fov: 40 }}>
+            <SceneCanvas camera={{ position: [0, 0.1, 8.5], fov: 40 }} frameloop={isVisible ? 'always' : 'never'}>
               <DlnaSceneContent reducedMotion={reducedMotion} particleCount={reducedMotion ? 0 : Math.round(PARTICLE_COUNT[tier] * 0.7)} />
             </SceneCanvas>
           )}

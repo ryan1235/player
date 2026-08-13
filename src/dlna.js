@@ -3,20 +3,37 @@ const https = require('https');
 const { Client } = require('node-ssdp');
 const { XMLParser } = require('fast-xml-parser');
 
+// Dispositivos DLNA na rede nao sao confiaveis (qualquer um pode responder ao
+// SSDP search ou aparecer como controlUrl) — sem limite de tamanho e timeout,
+// um device malicioso ou travado pode gotejar uma resposta infinita (esgota
+// memoria) ou nunca fechar a conexao (vaza socket a cada busca/browse).
+const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+const REQUEST_TIMEOUT_MS = 8000;
+
 function fetchText(url) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
-    lib
-      .get(url, (res) => {
+    const req = lib
+      .get(url, { timeout: REQUEST_TIMEOUT_MS }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           resolve(fetchText(res.headers.location));
           return;
         }
         let data = '';
-        res.on('data', (c) => (data += c));
+        let bytes = 0;
+        res.on('data', (c) => {
+          bytes += c.length;
+          if (bytes > MAX_RESPONSE_BYTES) {
+            res.destroy();
+            reject(new Error('Resposta do dispositivo DLNA excedeu o tamanho maximo permitido'));
+            return;
+          }
+          data += c;
+        });
         res.on('end', () => resolve(data));
       })
       .on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('Tempo esgotado ao consultar dispositivo DLNA')));
   });
 }
 
@@ -42,6 +59,7 @@ function soapRequest(controlUrl, serviceType, action, args) {
       url,
       {
         method: 'POST',
+        timeout: REQUEST_TIMEOUT_MS,
         headers: {
           'Content-Type': 'text/xml; charset="utf-8"',
           SOAPAction: `"${serviceType}#${action}"`,
@@ -50,11 +68,21 @@ function soapRequest(controlUrl, serviceType, action, args) {
       },
       (res) => {
         let data = '';
-        res.on('data', (c) => (data += c));
+        let bytes = 0;
+        res.on('data', (c) => {
+          bytes += c.length;
+          if (bytes > MAX_RESPONSE_BYTES) {
+            res.destroy();
+            reject(new Error('Resposta do dispositivo DLNA excedeu o tamanho maximo permitido'));
+            return;
+          }
+          data += c;
+        });
         res.on('end', () => resolve(data));
       }
     );
     req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('Tempo esgotado ao consultar dispositivo DLNA')));
     req.write(body);
     req.end();
   });

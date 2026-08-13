@@ -13,30 +13,31 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useInView } from '../hooks/useInView';
 import { PARTICLE_COUNT, usePerformanceTier } from '../hooks/usePerformanceTier';
 import { useGitHubReleases } from '../hooks/useGitHubReleases';
+import { resolveActiveRelease } from '../utils/activeRelease';
 import './DownloadFinal.css';
 
 export function DownloadFinal() {
   const { t } = useI18n();
   const reducedMotion = useReducedMotion();
   const tier = usePerformanceTier();
-  const { ref, inView } = useInView<HTMLDivElement>();
+  const { ref, inView, isVisible } = useInView<HTMLDivElement>();
   const hasGithub = !!siteConfig.links.github;
 
-  // Mesmo padrao de pages/Download.tsx: versao/tamanho reais vem da API do
-  // GitHub, siteConfig so serve de fallback enquanto a API nao responde.
+  // Mesmo padrao de pages/Download.tsx: versao/tamanho/link sempre vem da
+  // MESMA release (ver utils/activeRelease.ts) — siteConfig so serve de
+  // fallback enquanto a API nao responde.
   const { releases } = useGitHubReleases();
-  const latestRelease = releases[0] ?? null;
-  const displayVersion = latestRelease?.version || siteConfig.version;
-  const displaySizeBytes = latestRelease?.installerSizeBytes ?? siteConfig.installerSizeBytes;
+  const active = resolveActiveRelease(releases);
+  const { version: displayVersion, sizeBytes: displaySizeBytes, prerelease: isPrerelease, href: activeHref } = active;
 
   return (
     <section id="download" ref={ref} className="section download-final">
       <div className="download-final-canvas-wrap">
         {inView && (
-          <SceneCanvas camera={{ position: [0, 0, 7.5], fov: 42 }}>
+          <SceneCanvas camera={{ position: [0, 0, 7.5], fov: 42 }} frameloop={isVisible ? 'always' : 'never'}>
             <fog attach="fog" args={['#eef1f7', 8, 15]} />
             <SceneLights />
-            <DownloadObject scale={0.85} position={[0, 0.1, -1.5]} />
+            <DownloadObject scale={0.85} position={[0, 0.1, -1.5]} reducedMotion={reducedMotion} />
             <ParticleField count={reducedMotion ? 0 : PARTICLE_COUNT[tier]} radius={5} />
           </SceneCanvas>
         )}
@@ -56,7 +57,10 @@ export function DownloadFinal() {
               <h3>{t('download.cardTitle')}</h3>
               <p>{t('download.cardSubtitle')}</p>
             </div>
-            <span className="version-badge">v{displayVersion}</span>
+            <span className="version-badge">
+              v{displayVersion}
+              {isPrerelease && <span className="older-version-badge">{t('download.olderVersions.prerelease')}</span>}
+            </span>
           </div>
 
           <div className="download-card-meta">
@@ -89,7 +93,14 @@ export function DownloadFinal() {
             )}
           </div>
 
-          {!siteConfig.links.releaseDownloadWindows && <p className="download-card-note">{t('download.notPublished')}</p>}
+          {!activeHref && <p className="download-card-note">{t('download.notPublished')}</p>}
+          {active.htmlUrl && (
+            <p className="download-card-note">
+              <a href={active.htmlUrl} target="_blank" rel="noopener noreferrer">
+                {t('download.releaseNotesLink')}
+              </a>
+            </p>
+          )}
         </RevealOnScroll>
 
         <RevealOnScroll delay={0.18} className="install-steps">

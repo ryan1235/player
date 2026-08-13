@@ -114,6 +114,7 @@ class MPVPlayer extends EventEmitter {
     super();
     this.proc = null;
     this.socket = null;
+    this._connectPromise = null;
     this.pipeName = `\\\\.\\pipe\\mpv-player-${process.pid}`;
     this.requestId = 0;
     this.pending = new Map();
@@ -457,6 +458,7 @@ class MPVPlayer extends EventEmitter {
             reconnecting: true,
             reconnectAttempt: this._reconnect.attempts,
             reconnectMax: this._reconnect.maxAttempts,
+            reconnectDelayMs: this._reconnect.currentDelayMs,
             state: this.getState(),
           });
           return;
@@ -523,6 +525,14 @@ class MPVPlayer extends EventEmitter {
         this._buffer.reset();
         this._health.reset();
         this._latency.reset();
+        // Sem isso, um stall real que coincidisse com a deteccao de
+        // "deixou de ser live" (a janela de 8s de duracao parada do
+        // live-detector pode se sobrepor ao stall de 4s do watchdog) deixava
+        // _stallStartedAt/_wasBuffering do RecoveryManager velhos — o
+        // primeiro tick depois do "voltou a ser live" podia liberar a
+        // reproducao achando que o buffer ja tinha se reconstruido havia
+        // tempo, quando na verdade o stall acabou de comecar.
+        this._recovery.reset();
         this._lastReadaheadSecs = null;
         this._lastConfidenceTier = 0;
         this._lastSpeedTier = 'on-target';
@@ -642,8 +652,16 @@ class MPVPlayer extends EventEmitter {
         }
         if (typeof cacheTime === 'number' && typeof position === 'number') {
             cacheAmount = cacheTime - position;
+            // cacheTime e um timestamp absoluto do demuxer, nao uma duracao —
+            // usa-lo como fallback aqui (bug anterior) fazia RecoveryManager e
+            // StreamHealth lerem "buffer cheio" logo depois de qualquer seek
+            // pra borda ao vivo (quando demuxer-cache-time ainda nao
+            // acompanhou o novo position e a subtracao da negativo), liberando
+            // uma trava real antes do buffer ter de fato se reconstruido.
+            // Sem como saber quanto buffer existe de verdade nesse instante,
+            // assume 0 (conservador) em vez de inventar um valor absoluto.
             if (cacheAmount < 0 || cacheAmount > 100000) {
-               cacheAmount = cacheTime;
+               cacheAmount = 0;
             }
         }
 
@@ -751,6 +769,7 @@ class MPVPlayer extends EventEmitter {
         healthState,
         network: networkStats,
         bufferConfidence,
+        recentStallCount: this._buffer.recentStallCount,
         cacheAmount: cacheAmount || 0,
         targetLiveDelay: bufferTarget || 0,
         liveDelay: liveDelay || 0,
@@ -880,8 +899,14 @@ class MPVPlayer extends EventEmitter {
   }
 
   connect() {
-    return new Promise((resolve, reject) => {
-      if (this.socket && !this.socket.destroyed) return resolve();
+    if (this.socket && !this.socket.destroyed) return Promise.resolve();
+    // _startStatusLoop dispara varias getProperty() em paralelo a cada tick,
+    // cada uma passando por command() -> connect() — sem memoizar a tentativa
+    // em andamento, cada chamada concorrente abria seu proprio socket (so a
+    // ultima virava this.socket, as outras ficavam conectadas e orfas,
+    // vazando um pipe handle a cada restart do processo pelo watchdog).
+    if (this._connectPromise) return this._connectPromise;
+    this._connectPromise = new Promise((resolve, reject) => {
       const attempt = (retriesLeft) => {
         const sock = net.connect(this.pipeName);
         sock.once('connect', () => {
@@ -901,7 +926,10 @@ class MPVPlayer extends EventEmitter {
         });
       };
       attempt(20);
+    }).finally(() => {
+      this._connectPromise = null;
     });
+    return this._connectPromise;
   }
 
   _onData(chunk) {

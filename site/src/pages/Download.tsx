@@ -25,6 +25,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useInView } from '../hooks/useInView';
 import { PARTICLE_COUNT, usePerformanceTier } from '../hooks/usePerformanceTier';
 import { useGitHubReleases } from '../hooks/useGitHubReleases';
+import { resolveActiveRelease } from '../utils/activeRelease';
 import './Download.css';
 
 export function Download() {
@@ -42,12 +43,9 @@ export function Download() {
   // valores estaticos do config como rede de seguranca — nunca fica sem
   // nada pra mostrar.
   const { releases } = useGitHubReleases();
-  const latestRelease = releases[0] ?? null;
   const olderReleases = releases.slice(1);
-
-  const href = latestRelease?.installerUrl ?? siteConfig.links.releaseDownloadWindows;
-  const displayVersion = latestRelease?.version || siteConfig.version;
-  const displaySizeBytes = latestRelease?.installerSizeBytes ?? siteConfig.installerSizeBytes;
+  const active = resolveActiveRelease(releases);
+  const { href, sizeBytes: displaySizeBytes, version: displayVersion, prerelease: isPrerelease } = active;
 
   return (
     <>
@@ -56,10 +54,10 @@ export function Download() {
         <section className="section download-hero">
           <div ref={heroCanvas.ref} className="download-hero-canvas-wrap">
             {heroCanvas.inView && (
-              <SceneCanvas camera={{ position: [0, 0, 7.5], fov: 42 }}>
+              <SceneCanvas camera={{ position: [0, 0, 7.5], fov: 42 }} frameloop={heroCanvas.isVisible ? 'always' : 'never'}>
                 <fog attach="fog" args={['#eef1f7', 8, 15]} />
                 <SceneLights />
-                <DownloadObject scale={0.9} position={[0, 0.1, -1]} />
+                <DownloadObject scale={0.9} position={[0, 0.1, -1]} reducedMotion={reducedMotion} />
                 <ParticleField count={reducedMotion ? 0 : PARTICLE_COUNT[tier]} radius={5} />
               </SceneCanvas>
             )}
@@ -82,7 +80,10 @@ export function Download() {
                   <h3>{t('download.cardTitle')}</h3>
                   <p>{t('download.cardSubtitle')}</p>
                 </div>
-                <span className="version-badge">v{displayVersion}</span>
+                <span className="version-badge">
+                  v{displayVersion}
+                  {isPrerelease && <span className="older-version-badge">{t('download.olderVersions.prerelease')}</span>}
+                </span>
               </div>
 
               <div className="download-card-meta">
@@ -157,6 +158,13 @@ export function Download() {
 
               {!href && <p className="download-card-note">{t('download.notPublished')}</p>}
               {href && <p className="download-card-note">{t('download.terms.acceptedNote')}</p>}
+              {active.htmlUrl && (
+                <p className="download-card-note">
+                  <a href={active.htmlUrl} target="_blank" rel="noopener noreferrer">
+                    {t('download.releaseNotesLink')}
+                  </a>
+                </p>
+              )}
             </RevealOnScroll>
           </div>
         </section>
@@ -195,9 +203,9 @@ export function Download() {
             <RevealOnScroll delay={0.12} className="certificate-visual">
               <div ref={certCanvas.ref} className="certificate-canvas-wrap">
                 {certCanvas.inView && (
-                  <SceneCanvas camera={{ position: [0, 0, 6], fov: 40 }}>
+                  <SceneCanvas camera={{ position: [0, 0, 6], fov: 40 }} frameloop={certCanvas.isVisible ? 'always' : 'never'}>
                     <SceneLights />
-                    <CertificateShield3D scale={1.15} />
+                    <CertificateShield3D scale={1.15} reducedMotion={reducedMotion} />
                   </SceneCanvas>
                 )}
               </div>

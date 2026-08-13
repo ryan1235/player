@@ -1,17 +1,30 @@
-import { useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { SceneCanvas } from '../components/three/SceneCanvas';
-import { HeroScene } from '../components/three/HeroScene';
 import { DownloadButton } from '../components/ui/DownloadButton';
 import { IconNoAds, IconShieldCheck, IconHome, IconCode } from '../components/ui/icons';
 import { useI18n } from '../i18n/I18nProvider';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import './Hero.css';
 
+const HeroCanvas = lazy(() => import('../components/three/HeroCanvas'));
+
 export function Hero() {
   const { t } = useI18n();
   const reducedMotion = useReducedMotion();
   const sectionRef = useRef<HTMLDivElement>(null);
+  // Ao contrario das outras secoes 3D (useInView), o Hero e o unico que
+  // renderiza sempre, acima da dobra — mas o loop de render do Canvas
+  // (frameloop="always") continuava rodando pra sempre mesmo depois do
+  // usuario rolar bem pra baixo, saindo da tela. Reaproveita o sectionRef
+  // que ja existe aqui (usado pelo useScroll do framer-motion) num segundo
+  // IntersectionObserver so pra isso.
+  const [isVisible, setIsVisible] = useState(true);
+  useEffect(() => {
+    if (!sectionRef.current) return;
+    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting), { rootMargin: '200px' });
+    observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -26,9 +39,9 @@ export function Hero() {
   return (
     <section id="inicio" ref={sectionRef} className="hero">
       <motion.div className="hero-canvas-wrap" style={{ opacity: sceneOpacity, scale: sceneScale }}>
-        <SceneCanvas camera={{ position: [0, 0.4, 8.5], fov: 42 }} className="hero-canvas">
-          <HeroScene reducedMotion={reducedMotion} />
-        </SceneCanvas>
+        <Suspense fallback={null}>
+          <HeroCanvas reducedMotion={reducedMotion} className="hero-canvas" frameloop={isVisible ? 'always' : 'never'} />
+        </Suspense>
       </motion.div>
 
       <div className="hero-vignette" aria-hidden="true" />

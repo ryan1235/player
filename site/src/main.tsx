@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { I18nProvider } from './i18n/I18nProvider';
+import { GitHubReleasesProvider } from './hooks/useGitHubReleases';
 import { App } from './App';
 import { Download } from './pages/Download';
 import { Support } from './pages/Support';
@@ -16,13 +17,15 @@ import './styles/global.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<App />} />
-          <Route path="/download" element={<Download />} />
-          <Route path="/suporte" element={<Support />} />
-        </Routes>
-      </HashRouter>
+      <GitHubReleasesProvider>
+        <HashRouter>
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="/download" element={<Download />} />
+            <Route path="/suporte" element={<Support />} />
+          </Routes>
+        </HashRouter>
+      </GitHubReleasesProvider>
     </I18nProvider>
   </StrictMode>
 );

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { atomicWriteFileSync } = require('../services/atomic-write');
 
 class SegmentStorage {
   constructor(filePath) {
@@ -16,7 +17,7 @@ class SegmentStorage {
 
   _persist() {
     try {
-      fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2));
+      atomicWriteFileSync(this.filePath, JSON.stringify(this.data, null, 2));
     } catch {
       // silencioso se falhar, igual aos outros modulos (nao impacta a aplicacao)
     }

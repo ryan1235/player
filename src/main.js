@@ -300,10 +300,14 @@ app.whenReady().then(async () => {
   });
   renderer = new DlnaRenderer(player);
   renderer.on('activity', (info) => {
-    mainWindow.webContents.send('cast:activity', info);
+    broadcast('cast:activity', info);
   });
   renderer.on('source', (info) => {
     broadcast('cast:source', info);
+  });
+  renderer.on('crashed', (err) => {
+    logger.network('[cast-supervisor] servidor do modo Receber caiu inesperadamente:', err.message);
+    broadcast('cast:status-changed', renderer.getStatus());
   });
 
   mainWindow.on('enter-full-screen', () => broadcast('player:fullscreen-changed', true));
@@ -322,6 +326,7 @@ app.whenReady().then(async () => {
   if (settings.get('checkUpdatesAutomatically')) {
     checkForUpdates().catch((err) => logger.network('[auto-updater] falha na checagem automatica:', err.message));
   }
+  startUpdateSupervisor();
 });
 
 // Supervisiona o modo "Receber" (Configuracoes > DLNA > Reconexao automatica):
@@ -336,10 +341,18 @@ function startCastSupervisor() {
   castSupervisorTimer = setInterval(async () => {
     if (!settings.get('autoReconnectCast')) return;
     const status = renderer.getStatus();
-    if (!status.active) return;
-    const stillValid = status.interfaces.some((i) => i.name === status.interfaceName && i.address === status.ip);
-    if (stillValid) return;
-    logger.network('[cast-supervisor] interface/IP mudou, reiniciando recepcao...');
+    // status.crashed so fica true quando o servidor HTTP caiu sozinho depois
+    // de ter iniciado (ver DlnaRenderer._crashed) — nesse caso reinicia
+    // mesmo com active=false, diferente do caso "usuario desligou", que o
+    // early-return abaixo continua respeitando.
+    if (!status.active && !status.crashed) return;
+    if (status.active) {
+      const stillValid = status.interfaces.some((i) => i.name === status.interfaceName && i.address === status.ip);
+      if (stillValid) return;
+      logger.network('[cast-supervisor] interface/IP mudou, reiniciando recepcao...');
+    } else {
+      logger.network('[cast-supervisor] servidor caiu, tentando reiniciar recepcao...');
+    }
     try {
       await renderer.stop();
       const next = await renderer.start(settings.get('preferredInterface'));
@@ -350,6 +363,21 @@ function startCastSupervisor() {
   }, 15000);
 }
 
+// A checagem automatica de update ate aqui so rodava uma vez, no boot — o
+// app e feito pra ficar rodando por dias como alvo fixo de cast (e por isso
+// existe o cast-supervisor acima), entao uma sessao longa nunca saberia de
+// versao nova sem reiniciar o app manualmente. Reconfere periodicamente
+// enquanto a checagem automatica estiver ligada nas configuracoes.
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let updateCheckTimer = null;
+function startUpdateSupervisor() {
+  if (updateCheckTimer) return;
+  updateCheckTimer = setInterval(() => {
+    if (!settings.get('checkUpdatesAutomatically')) return;
+    checkForUpdates().catch((err) => logger.network('[auto-updater] falha na checagem periodica:', err.message));
+  }, UPDATE_CHECK_INTERVAL_MS);
+}
+
 app.on('window-all-closed', () => {
   player.quit();
   renderer.stop().catch(() => {});
@@ -358,6 +386,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   if (castSupervisorTimer) clearInterval(castSupervisorTimer);
+  if (updateCheckTimer) clearInterval(updateCheckTimer);
   player.quit();
   renderer.stop().catch(() => {});
 });

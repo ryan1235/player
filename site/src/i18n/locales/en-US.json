@@ -26,6 +26,7 @@
   "download.dependencyLabel": "Requires",
   "download.sizeLabel": "Size",
   "download.notPublished": "We haven't published a public download link yet. Watch the repository for the first release.",
+  "download.releaseNotesLink": "View release notes on GitHub",
   "download.githubButton": "View on GitHub",
   "download.githubSoon": "Repository coming soon",
   "download.cardTitle": "Aura Player for Windows",

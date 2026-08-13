@@ -44,6 +44,10 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
   logger.network('[auto-updater] falha na checagem/download:', err.message);
+  // Os outros eventos (available/progress/ready) sempre avisam a renderer —
+  // erro (rede caindo, GitHub com rate-limit) so ficava no log, e quem tinha
+  // acabado de clicar "Verificar agora" nao via nenhum feedback do que deu errado.
+  send('update:error', { message: err.message });
 });
 
 function setMainWindow(win) {

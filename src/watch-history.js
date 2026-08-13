@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { atomicWriteFileSync } = require('./services/atomic-write');
 
 class WatchHistory {
   constructor(filePath) {
@@ -16,7 +17,7 @@ class WatchHistory {
 
   _persist() {
     try {
-      fs.writeFileSync(this.filePath, JSON.stringify(this.data));
+      atomicWriteFileSync(this.filePath, JSON.stringify(this.data));
     } catch {
       // nao foi possivel gravar o historico, segue sem persistir
     }

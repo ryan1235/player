@@ -14,13 +14,13 @@ export function Mockup() {
   const { t } = useI18n();
   const reducedMotion = useReducedMotion();
   const tier = usePerformanceTier();
-  const { ref, inView } = useInView<HTMLDivElement>();
+  const { ref, inView, isVisible } = useInView<HTMLDivElement>();
 
   return (
     <section className="section mockup-section">
       <div ref={ref} className="mockup-canvas-wrap">
         {inView && (
-          <SceneCanvas camera={{ position: [0, 0.3, 6.6], fov: 38 }}>
+          <SceneCanvas camera={{ position: [0, 0.3, 6.6], fov: 38 }} frameloop={isVisible ? 'always' : 'never'}>
             <fog attach="fog" args={['#eef1f7', 8, 15]} />
             <SceneLights />
             <Laptop3D position={[0, -1.3, 0]} scale={1.7} rotation={[0, -0.28, 0]} float={!reducedMotion} />

@@ -94,6 +94,7 @@ const dbg = {
   dvr: document.getElementById('dbg-dvr'),
   healing: document.getElementById('dbg-healing'),
   reconnects: document.getElementById('dbg-reconnects'),
+  stalls: document.getElementById('dbg-stalls'),
 };
 let debugVisible = false;
 
@@ -124,7 +125,10 @@ function renderDebug(info) {
   dbg.download.textContent = info.downloadSpeed ? `${(info.downloadSpeed / 1e6).toFixed(2)} MB/s` : '—';
   dbg.dvr.textContent = info.dvrMode ? 'ON' : 'OFF';
   dbg.healing.textContent = state.isRecovering ? 'RECUPERANDO' : state.isReconnecting ? 'RECONECTANDO' : 'PRONTO';
-  dbg.reconnects.textContent = info.reconnectAttempt ? `${info.reconnectAttempt}/${info.reconnectMax}` : '0';
+  dbg.reconnects.textContent = info.reconnectAttempt
+    ? `${info.reconnectAttempt}/${info.reconnectMax}${info.reconnectDelayMs ? ` (proxima em ${(info.reconnectDelayMs / 1000).toFixed(0)}s)` : ''}`
+    : '0';
+  dbg.stalls.textContent = typeof info.recentStallCount === 'number' ? String(info.recentStallCount) : '—';
 }
 
 function toggleDebugOverlay() {
@@ -508,7 +512,9 @@ function renderStatsBody() {
     ['Bitrate', info.bitrate ? `${(info.bitrate / 1e6).toFixed(2)} Mbps` : '—'],
     ['FPS', info.fps ? info.fps.toFixed(2) : '—'],
     ['Frames perdidos', info.droppedFrames ?? '—'],
-    ['Reconexões', info.reconnectAttempt ? `${info.reconnectAttempt}/${info.reconnectMax}` : '0'],
+    ['Reconexões', info.reconnectAttempt
+      ? `${info.reconnectAttempt}/${info.reconnectMax}${info.reconnectDelayMs ? ` — próxima em ${(info.reconnectDelayMs / 1000).toFixed(0)}s` : ''}`
+      : '0'],
   ];
   modalBodyEl.innerHTML = rows.map(([k, v]) => `<div class="ov-stat-row"><span>${k}</span><span>${v}</span></div>`).join('');
 }
@@ -704,7 +710,8 @@ window.api.onPlayerStatus((info) => {
 
   if (info.reconnecting) {
     bufferingEl.hidden = false;
-    bufferingEl.textContent = `Reconectando… (${info.reconnectAttempt}/${info.reconnectMax})`;
+    const countdown = info.reconnectDelayMs > 0 ? ` em ${Math.ceil(info.reconnectDelayMs / 1000)}s` : '';
+    bufferingEl.textContent = `Reconectando${countdown}… (${info.reconnectAttempt}/${info.reconnectMax})`;
     bufferingEl.className = 'ov-buffering ov-buffering-warn';
   } else {
     bufferingEl.hidden = !info.buffering;

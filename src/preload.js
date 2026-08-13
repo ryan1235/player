@@ -93,5 +93,6 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateAvailable: (cb) => ipcRenderer.on('update:available', (_evt, info) => cb(info)),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_evt, info) => cb(info)),
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_evt, info) => cb(info)),
+  onUpdateError: (cb) => ipcRenderer.on('update:error', (_evt, info) => cb(info)),
   getVersionInfo: () => ipcRenderer.invoke('app:get-version-info'),
 });

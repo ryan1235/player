@@ -16,6 +16,7 @@ class ReconnectManager {
     this._maxDelayMs = maxDelayMs;
     this.attempts = 0;
     this._timer = null;
+    this._scheduledAt = null;
   }
 
   get pending() {
@@ -51,14 +52,22 @@ class ReconnectManager {
     if (this.pending) return;
     this.attempts++;
     const delay = this._delayForAttempt(this.attempts);
+    this._scheduledAt = Date.now();
     this._timer = setTimeout(() => {
       this._timer = null;
       if (canFire()) onFire();
     }, delay);
   }
 
+  // Tempo restante ate a proxima tentativa disparar, nao o delay total
+  // agendado — assim quem consome isso (status emitido a cada ~1s) consegue
+  // mostrar uma contagem regressiva de verdade em vez de um numero fixo
+  // parado no valor inicial pelo tempo todo que a tentativa fica pendente.
   get currentDelayMs() {
-    return this._delayForAttempt(this.attempts);
+    if (!this.pending || this._scheduledAt === null) return 0;
+    const total = this._delayForAttempt(this.attempts);
+    const elapsed = Date.now() - this._scheduledAt;
+    return Math.max(0, total - elapsed);
   }
 }
 

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { atomicWriteFileSync } = require('./services/atomic-write');
 
 const DEFAULTS = {
   autoStartRenderer: false,
@@ -33,7 +34,7 @@ class Settings {
 
   _persist() {
     try {
-      fs.writeFileSync(this.filePath, JSON.stringify(this.data));
+      atomicWriteFileSync(this.filePath, JSON.stringify(this.data));
     } catch {
       // nao foi possivel gravar as configuracoes, segue sem persistir
     }

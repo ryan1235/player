@@ -960,6 +960,9 @@ window.api.onUpdateProgress(({ percent }) => {
 window.api.onUpdateReady(({ latestVersion }) => {
   updateStatusEl.textContent = t('update.readyToInstall', { version: latestVersion });
 });
+window.api.onUpdateError(({ message }) => {
+  updateStatusEl.textContent = t('update.error', { message });
+});
 
 window.api.getVersionInfo()
   .then((info) => {
