@@ -359,6 +359,7 @@ const castToggleBtn = document.getElementById('btn-cast-toggle');
 const castStatusEl = document.getElementById('cast-status');
 const autoStartChk = document.getElementById('chk-auto-start');
 const interfaceSelect = document.getElementById('sel-interface');
+const dlnaFriendlyNameInput = document.getElementById('txt-dlna-friendly-name');
 const activityDot = document.getElementById('cast-activity-dot');
 const activityText = document.getElementById('cast-activity-text');
 
@@ -404,6 +405,9 @@ function renderCastStatus(status) {
   } else {
     castToggleBtn.textContent = t('devices.receive.activate');
     castStatusEl.textContent = t('cast.status.inactive');
+  }
+  if (status.friendlyName && dlnaFriendlyNameInput && !dlnaFriendlyNameInput.value) {
+    dlnaFriendlyNameInput.placeholder = status.friendlyName;
   }
   if (status.interfaces) populateInterfaceSelect(status.interfaces);
 }
@@ -460,6 +464,7 @@ Promise.all([window.api.getSettings(), window.api.rendererStatus()])
     interfaceSelect.value = s.preferredInterface || '';
 
     discoveryTimeoutSelect.value = String(s.dlnaDiscoveryTimeout || 4000);
+    if (dlnaFriendlyNameInput) dlnaFriendlyNameInput.value = s.dlnaFriendlyName || '';
     defaultVolumeSelect.value = String(s.defaultVolume ?? 100);
     autoReconnectChk.checked = !!s.autoReconnectCast;
     autoPlayNextChk.checked = !!s.autoPlayNext;
@@ -469,12 +474,14 @@ Promise.all([window.api.getSettings(), window.api.rendererStatus()])
     liveEventToastsChk.checked = s.showLiveEventToasts !== false;
     liveCustomTargetInput.value = s.liveCustomTargetSecs ?? 5;
     liveCustomTargetRow.hidden = liveBufferProfileSelect.value !== 'custom';
+    videoQualityProfileSelect.value = s.videoQualityProfile || 'high';
+    videoDebandChk.checked = s.videoDeband !== false;
   })
   .catch(() => {});
 
 window.api.onCastStatusChanged((status) => renderCastStatus(status));
 
-// --- Configurações: Player (ajuste de imagem) ---
+// --- Configurações: Player (ajuste de imagem, qualidade de vídeo, deband) ---
 const fitModeSelect = document.getElementById('sel-fit-mode');
 window.api.getFitModes().then(({ modes, current }) => {
   fitModeSelect.innerHTML = '';
@@ -490,6 +497,105 @@ window.api.getFitModes().then(({ modes, current }) => {
 fitModeSelect.addEventListener('change', () => {
   window.api.setFitMode(fitModeSelect.value).catch(() => {});
 });
+
+const videoQualityProfileSelect = document.getElementById('sel-video-quality-profile');
+videoQualityProfileSelect.addEventListener('change', () => {
+  window.api.setVideoQualityProfile(videoQualityProfileSelect.value).catch(() => {});
+});
+
+const videoDebandChk = document.getElementById('chk-video-deband');
+videoDebandChk.addEventListener('change', () => {
+  window.api.setVideoDeband(videoDebandChk.checked).catch(() => {});
+});
+
+const audioNightModeChk = document.getElementById('chk-audio-night-mode');
+const audioPresetSelect = document.getElementById('sel-audio-preset');
+
+window.api.getNightMode().then((v) => { if (audioNightModeChk) audioNightModeChk.checked = !!v; }).catch(() => {});
+if (audioNightModeChk) {
+  audioNightModeChk.addEventListener('change', () => {
+    window.api.setNightMode(audioNightModeChk.checked).catch(() => {});
+  });
+}
+window.api.onNightModeChanged((v) => {
+  if (audioNightModeChk) audioNightModeChk.checked = !!v;
+});
+
+window.api.getAudioPreset().then((v) => { if (audioPresetSelect && v) audioPresetSelect.value = v; }).catch(() => {});
+if (audioPresetSelect) {
+  audioPresetSelect.addEventListener('change', () => {
+    window.api.setAudioPreset(audioPresetSelect.value).catch(() => {});
+  });
+}
+window.api.onAudioPresetChanged((v) => {
+  if (audioPresetSelect && v) audioPresetSelect.value = v;
+});
+
+const autoSkipIntroChk = document.getElementById('chk-auto-skip-intro');
+window.api.getAutoSkipIntro().then((v) => { if (autoSkipIntroChk) autoSkipIntroChk.checked = !!v; }).catch(() => {});
+if (autoSkipIntroChk) {
+  autoSkipIntroChk.addEventListener('change', () => {
+    window.api.setAutoSkipIntro(autoSkipIntroChk.checked).catch(() => {});
+  });
+}
+window.api.onAutoSkipIntroChanged((v) => {
+  if (autoSkipIntroChk) autoSkipIntroChk.checked = !!v;
+});
+
+// --- Configurações: Lista de Perfis Acústicos Salvos ---
+const introProfilesListEl = document.getElementById('intro-profiles-list');
+
+async function renderIntroProfiles() {
+  if (!introProfilesListEl) return;
+  try {
+    const profiles = await window.api.getIntroProfiles();
+    introProfilesListEl.innerHTML = '';
+    if (!profiles || profiles.length === 0) {
+      introProfilesListEl.innerHTML = `
+        <div class="intro-profiles-empty" data-i18n="player.introProfiles.empty">
+          ${t('player.introProfiles.empty')}
+        </div>
+      `;
+      return;
+    }
+
+    profiles.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'intro-profile-item';
+      const hasAcoustic = Array.isArray(p.signature) && p.signature.length > 0;
+      const startStr = typeof p.defaultStart === 'number' ? formatClock(p.defaultStart) : '--:--';
+      const durStr = Math.round(p.duration || 0) + 's';
+
+      item.innerHTML = `
+        <div class="intro-profile-info">
+          <div class="intro-profile-title-row">
+            <span class="intro-profile-title">${p.title || 'Abertura'}</span>
+            <span class="intro-profile-tag ${hasAcoustic ? 'acoustic' : 'interval'}">
+              ${hasAcoustic ? '🎵 ' + t('player.introProfiles.acousticActive') : '⏱ ' + t('player.introProfiles.intervalOnly')}
+            </span>
+          </div>
+          <span class="intro-profile-meta">Início padrão: ${startStr} · Duração: ${durStr}</span>
+        </div>
+        <div class="intro-profile-actions">
+          <button type="button" class="intro-profile-delete-btn" title="${t('player.introProfiles.delete')}" data-id="${p.id}">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      `;
+
+      item.querySelector('.intro-profile-delete-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await window.api.deleteIntroProfile(p.id);
+        renderIntroProfiles();
+      });
+
+      introProfilesListEl.appendChild(item);
+    });
+  } catch {}
+}
+
+renderIntroProfiles();
+window.api.onIntroDetected(() => renderIntroProfiles());
 
 // --- Configurações: Geral (janela sempre visível) ---
 const alwaysOnTopChk = document.getElementById('chk-always-on-top');
@@ -518,11 +624,17 @@ document.getElementById('btn-open-github').addEventListener('click', () => {
   window.api.openExternal(GITHUB_REPO_URL).catch(() => {});
 });
 
-// --- Configurações: DLNA (tempo de descoberta, reconexão automática) ---
+// --- Configurações: DLNA (tempo de descoberta, nome na rede, reconexão automática) ---
 const discoveryTimeoutSelect = document.getElementById('sel-discovery-timeout');
 discoveryTimeoutSelect.addEventListener('change', () => {
   window.api.setDiscoveryTimeout(Number(discoveryTimeoutSelect.value)).catch(() => {});
 });
+
+if (dlnaFriendlyNameInput) {
+  dlnaFriendlyNameInput.addEventListener('change', () => {
+    window.api.setDlnaFriendlyName(dlnaFriendlyNameInput.value).catch(() => {});
+  });
+}
 
 const autoReconnectChk = document.getElementById('chk-auto-reconnect');
 autoReconnectChk.addEventListener('change', () => {
@@ -986,3 +1098,21 @@ languageSelect.addEventListener('change', () => {
   if (lastCastStatus) renderCastStatus(lastCastStatus);
   if (lastLibraryIndex) renderLibrary(lastLibraryIndex);
 });
+
+// --- Sincronização de ocultamento do cursor no MainWindow ---
+let mainIdleTimer = null;
+function handleActivity() {
+  document.documentElement.classList.remove('idle');
+  document.body.classList.remove('idle');
+  clearTimeout(mainIdleTimer);
+  mainIdleTimer = setTimeout(() => {
+    const playerTab = document.getElementById('tab-player');
+    if (playerTab && playerTab.classList.contains('active')) {
+      document.documentElement.classList.add('idle');
+      document.body.classList.add('idle');
+    }
+  }, 2500);
+}
+
+window.api.onActivity(handleActivity);
+window.addEventListener('mousemove', handleActivity);

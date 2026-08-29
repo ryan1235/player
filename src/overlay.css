@@ -1,5 +1,9 @@
 * { box-sizing: border-box; }
 
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   margin: 0;
   width: 100%;
@@ -116,8 +120,15 @@ button { font: inherit; }
   pointer-events: none;
 }
 
-.ov-root.idle {
-  cursor: none;
+html.idle,
+html.idle *,
+body.idle,
+body.idle *,
+.ov-root.idle,
+.ov-root.idle *,
+.ov-root.idle *::before,
+.ov-root.idle *::after {
+  cursor: none !important;
 }
 
 /* --- Barra de progresso --- */
@@ -137,7 +148,7 @@ button { font: inherit; }
   width: 100%;
   height: 4px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.2);
   transition: height 0.12s ease;
 }
 
@@ -147,6 +158,7 @@ button { font: inherit; }
 }
 
 .ov-progress-buffered,
+.ov-progress-intro,
 .ov-progress-played {
   position: absolute;
   top: 0;
@@ -158,11 +170,22 @@ button { font: inherit; }
 }
 
 .ov-progress-buffered {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
+  transition: width 0.15s ease;
+  z-index: 1;
+}
+
+.ov-progress-intro {
+  background: rgba(255, 200, 60, 0.65);
+  box-shadow: 0 0 8px rgba(255, 200, 60, 0.35);
+  z-index: 2;
+  transition: left 0.15s ease, width 0.15s ease;
 }
 
 .ov-progress-played {
   background: var(--accent);
+  z-index: 3;
 }
 
 .ov-progress-thumb {
@@ -178,6 +201,7 @@ button { font: inherit; }
   opacity: 0;
   transition: transform 0.12s ease, opacity 0.12s ease;
   pointer-events: none;
+  z-index: 3;
 }
 
 .ov-progress-hit:hover .ov-progress-thumb,
@@ -737,4 +761,325 @@ button { font: inherit; }
 .ov-live-toast-reconnecting .ov-live-toast-dot { background: #facc15; }
 .ov-live-toast-stall .ov-live-toast-dot,
 .ov-live-toast-error .ov-live-toast-dot { background: #f87171; }
+
+/* --- OSD Gesture & Status Display --- */
+.ov-osd {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: rgba(18, 20, 26, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  min-width: 170px;
+}
+
+.ov-osd.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.ov-osd-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent, #6366f1);
+  flex-shrink: 0;
+}
+
+.ov-osd-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.ov-osd-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.ov-osd-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.ov-osd-bar-wrap {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ov-osd-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent, #6366f1);
+  border-radius: 2px;
+  transition: width 0.08s ease;
+}
+
+/* Audio menu enhancements */
+.ov-menu-section-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  padding: 6px 8px 3px;
+}
+
+.ov-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+.ov-menu-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  gap: 8px;
+}
+
+.ov-menu-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ov-menu-stepper-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: bold;
+}
+.ov-menu-stepper-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ov-menu-stepper-val {
+  font-variant-numeric: tabular-nums;
+  min-width: 48px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* --- Botão Flutuante de Pular Abertura (Netflix Style) --- */
+.ov-skip-intro-btn {
+  position: absolute;
+  right: 28px;
+  bottom: 84px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: rgba(18, 20, 26, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+  user-select: none;
+}
+.ov-skip-intro-btn[hidden] {
+  display: none !important;
+}
+.ov-skip-intro-btn:hover {
+  background: rgba(255, 255, 255, 0.95);
+  color: #0b0d13;
+  border-color: #fff;
+  transform: scale(1.04);
+}
+.ov-skip-intro-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+  line-height: 1;
+}
+/* --- Transição Suave de Pulo --- */
+.ov-seek-flash {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 80;
+  transition: opacity 0.14s ease-out;
+}
+.ov-seek-flash.active {
+  opacity: 1;
+}
+
+.ov-skip-ring {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg);
+  flex-shrink: 0;
+}
+.ov-skip-ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 3;
+}
+.ov-skip-ring-bar {
+  fill: none;
+  stroke: #4f86f7;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 81.68;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.1s linear;
+}
+.ov-skip-cancel-hint {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 2px;
+  opacity: 0.85;
+}
+.ov-skip-intro-btn:hover .ov-skip-cancel-hint {
+  color: #555;
+}
+
+/* --- HUD de Marcação de Abertura --- */
+.ov-intro-hud {
+  position: absolute;
+  right: 24px;
+  bottom: 84px;
+  z-index: 45;
+  width: 270px;
+  background: rgba(15, 17, 23, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  animation: ovSlideUp 0.18s ease-out;
+}
+.ov-intro-hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.ov-intro-hud-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ov-intro-hud-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.ov-intro-hud-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.ov-intro-hud-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+  margin-bottom: 12px;
+}
+.ov-intro-hud-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ov-intro-step-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 6px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.ov-intro-step-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.ov-intro-step-btn.marked {
+  background: rgba(79, 134, 247, 0.2);
+  border-color: var(--accent);
+  color: #fff;
+}
+.ov-step-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ov-step-time {
+  font-size: 13px;
+  font-weight: 600;
+}
+.ov-intro-save-btn {
+  width: 100%;
+  padding: 9px;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.ov-intro-save-btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: scale(1.02);
+}
+.ov-intro-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 

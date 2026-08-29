@@ -22,6 +22,7 @@
         <div class="ov-progress-hit" id="ov-progress-hit">
           <div class="ov-progress-track">
             <div class="ov-progress-buffered" id="ov-progress-buffered"></div>
+            <div class="ov-progress-intro" id="ov-progress-intro" hidden></div>
             <div class="ov-progress-played" id="ov-progress-played"></div>
             <div class="ov-progress-thumb" id="ov-progress-thumb"></div>
           </div>
@@ -115,11 +116,64 @@
               </button>
               <div class="ov-menu ov-menu-actions" id="ov-more-menu" role="menu" aria-label="Mais opções"></div>
             </div>
+            <button id="btn-pip" class="ov-btn" aria-label="Picture-in-Picture" title="Picture-in-Picture (P)">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="11" width="8" height="7" rx="1" fill="currentColor" stroke="none"/></svg>
+            </button>
             <button id="btn-fullscreen" class="ov-btn" aria-label="Alternar tela cheia" title="Tela cheia (F)">
               <svg id="icon-fs-enter" viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <svg id="icon-fs-exit" viewBox="0 0 24 24" width="17" height="17" fill="none" hidden><path d="M9 4v3a1 1 0 0 1-1 1H5M15 4v3a1 1 0 0 0 1 1h3M9 20v-3a1 1 0 0 0-1-1H5M15 20v-3a1 1 0 0 1 1-1h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flash de Transição Suave ao Pular -->
+    <div class="ov-seek-flash" id="ov-seek-flash" aria-hidden="true"></div>
+
+    <!-- Botão Flutuante de Pular Abertura (Netflix Style) -->
+    <button type="button" class="ov-skip-intro-btn" id="btn-skip-intro" hidden>
+      <svg class="ov-skip-ring" id="ov-skip-ring" viewBox="0 0 32 32" hidden>
+        <circle class="ov-skip-ring-bg" cx="16" cy="16" r="13"></circle>
+        <circle class="ov-skip-ring-bar" id="ov-skip-ring-bar" cx="16" cy="16" r="13"></circle>
+      </svg>
+      <svg class="ov-skip-icon" id="ov-skip-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+        <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
+      </svg>
+      <span class="ov-skip-intro-text" id="ov-skip-text">Pular Abertura</span>
+      <span class="ov-skip-intro-key" id="ov-skip-key">S</span>
+      <span class="ov-skip-cancel-hint" id="ov-skip-cancel-hint" hidden>Esc para assistir</span>
+    </button>
+
+    <!-- HUD de Marcação de Abertura (Episódio 1) -->
+    <div class="ov-intro-hud" id="ov-intro-hud" hidden>
+      <div class="ov-intro-hud-header">
+        <span class="ov-intro-hud-title">Marcar Abertura</span>
+        <button type="button" class="ov-intro-hud-close" id="btn-close-intro-hud" title="Fechar">✕</button>
+      </div>
+      <div class="ov-intro-hud-desc">Marque o início e o fim para o player aprender o som da abertura:</div>
+      <div class="ov-intro-hud-actions">
+        <button type="button" class="ov-intro-step-btn" id="btn-mark-start">
+          <span class="ov-step-label">▶ Início (I)</span>
+          <b class="ov-step-time" id="lbl-intro-start">--:--</b>
+        </button>
+        <button type="button" class="ov-intro-step-btn" id="btn-mark-end">
+          <span class="ov-step-label">⏹ Fim (O)</span>
+          <b class="ov-step-time" id="lbl-intro-end">--:--</b>
+        </button>
+      </div>
+      <div class="ov-intro-hud-footer">
+        <button type="button" class="ov-intro-save-btn" id="btn-save-intro" disabled>
+          💾 Salvar & Extrair Assinatura
+        </button>
+      </div>
+    </div>
+    <div class="ov-osd" id="ov-osd" hidden>
+      <div class="ov-osd-icon" id="ov-osd-icon"></div>
+      <div class="ov-osd-content">
+        <div class="ov-osd-title" id="ov-osd-title"></div>
+        <div class="ov-osd-bar-wrap" id="ov-osd-bar-wrap">
+          <div class="ov-osd-bar" id="ov-osd-bar"></div>
         </div>
       </div>
     </div>

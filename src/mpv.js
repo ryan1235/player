@@ -46,15 +46,62 @@ const WATCHDOG_STALL_MS = 4000;
 const COMMAND_TIMEOUT_RESTART_THRESHOLD = 3;
 const DEFAULT_FIT_MODE = { id: 'original', aspect: '-1', panscan: 0 };
 
+const VIDEO_QUALITY_PROFILES = {
+  high: {
+    id: 'high',
+    scale: 'spline36',
+    cscale: 'spline36',
+    dscale: 'mitchell',
+    correctDownscaling: 'yes',
+    linearDownscaling: 'yes',
+    sigmoidUpscaling: 'yes',
+  },
+  ultra: {
+    id: 'ultra',
+    scale: 'ewa_lanczossharp',
+    cscale: 'ewa_lanczossharp',
+    dscale: 'mitchell',
+    correctDownscaling: 'yes',
+    linearDownscaling: 'yes',
+    sigmoidUpscaling: 'yes',
+  },
+  performance: {
+    id: 'performance',
+    scale: 'bilinear',
+    cscale: 'bilinear',
+    dscale: 'bilinear',
+    correctDownscaling: 'no',
+    linearDownscaling: 'no',
+    sigmoidUpscaling: 'no',
+  },
+};
+
+const AUDIO_PRESETS = {
+  flat: { id: 'flat', filter: null },
+  cinema: { id: 'cinema', filter: 'lavfi=[equalizer=f=60:width_type=o:w=1:g=3,equalizer=f=2500:width_type=o:w=1:g=3.5,equalizer=f=8000:width_type=o:w=1:g=2]' },
+  dialogue: { id: 'dialogue', filter: 'lavfi=[highpass=f=100,equalizer=f=2000:width_type=o:w=1.5:g=5,equalizer=f=3500:width_type=o:w=1.5:g=3]' },
+  bass: { id: 'bass', filter: 'lavfi=[equalizer=f=80:width_type=o:w=1:g=6,equalizer=f=120:width_type=o:w=1:g=4]' },
+  music: { id: 'music', filter: 'lavfi=[equalizer=f=60:width_type=o:w=1:g=4,equalizer=f=1000:width_type=o:w=1:g=-1.5,equalizer=f=10000:width_type=o:w=1:g=4]' },
+};
+
+const NIGHT_MODE_FILTER = 'lavfi=[dynaudnorm=f=150:g=15:m=12:p=0.95]';
+
 // Mesma lista de extensoes do filtro de "Abrir arquivo" (main.js). Um arquivo
 // com uma dessas extensoes tem duração fixa por definição — mesmo chegando
 // via DLNA/HTTP progressivo (onde o mpv reporta a "duração conhecida até
 // agora" oscilando enquanto ainda baixa), nunca deve ser tratado como live.
-const FINITE_MEDIA_EXTENSIONS = /\.(mp4|mkv|avi|mov|webm|flv|m4v|ts)(\?.*)?$/i;
+const FINITE_MEDIA_EXTENSIONS = /\.(mp4|mkv|avi|mov|webm|flv|m4v|ts|wmv|asf|3gp|m2ts|mts|vob|ogv|rmvb|divx|f4v)(\?.*)?$/i;
+const VOD_URL_PATTERNS = /\/(movie|movies|serie|series|vod|filme|filmes|episode|episodes|temporada|capitulo|animes|anime|drama|dramas)\b/i;
 
 function isFiniteMediaFile(target) {
-  if (!target) return false;
-  return FINITE_MEDIA_EXTENSIONS.test(target);
+  if (!target || typeof target !== 'string') return false;
+  // Arquivos locais no disco do computador são sempre finitos
+  if (/^[a-zA-Z]:[\\/]/.test(target) || target.startsWith('/') || target.startsWith('file://')) {
+    return true;
+  }
+  if (FINITE_MEDIA_EXTENSIONS.test(target)) return true;
+  if (VOD_URL_PATTERNS.test(target)) return true;
+  return false;
 }
 
 function resolveMpvBinary() {
@@ -140,6 +187,13 @@ class MPVPlayer extends EventEmitter {
     this._statusTimer = null;
     this.fitMode = options.fitMode || DEFAULT_FIT_MODE;
     this.screenshotDir = options.screenshotDir || null;
+    this.videoQualityProfile = options.videoQualityProfile || 'high';
+    this.videoDeband = options.videoDeband !== false;
+    this.brightness = 0;
+    this.contrast = 0;
+    this.audioNightMode = !!options.audioNightMode;
+    this.audioDelaySecs = Number(options.audioDelaySecs) || 0;
+    this.audioPreset = options.audioPreset || 'flat';
     // Fonte unica de verdade do estado de reproducao/live — antes eram varios
     // booleans soltos na instancia (isLive, dvrMode, _reconnecting,
     // wasBuffering, liveModeLocked, _stopRequested), dificeis de auditar em
@@ -175,6 +229,9 @@ class MPVPlayer extends EventEmitter {
       bufferManager: this._buffer,
     });
     this._reconnect = new ReconnectManager({ maxAttempts: MAX_RECONNECT_ATTEMPTS });
+    this._loading = false;
+    this._loadingDeadline = 0;
+    this._lastTrackCount = 0;
     // Watchdog de "falso funcionamento" (item 21/22): posicao parada mesmo
     // com o player supostamente tocando.
     this._watchdogLastPosition = null;
@@ -241,6 +298,7 @@ class MPVPlayer extends EventEmitter {
 
   start() {
     if (this.isRunning()) return;
+    const prof = VIDEO_QUALITY_PROFILES[this.videoQualityProfile] || VIDEO_QUALITY_PROFILES.high;
     const args = [
       `--input-ipc-server=${this.pipeName}`,
       `--config-dir=${MPV_CONFIG_DIR}`,
@@ -250,13 +308,19 @@ class MPVPlayer extends EventEmitter {
       '--force-window=yes',
       '--osc=no',
       '--osd-level=0',
+      '--cursor-autohide=1000',
+      '--cursor-autohide-fs-only=no',
       '--keep-open=yes',
       '--alang=pt-br,pt,por,eng',
       '--slang=pt-br,pt,por,eng',
       '--volume-max=150',
       '--cache=yes',
+      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '--demuxer-max-bytes=1000M',
       '--demuxer-max-back-bytes=200M',
+      '--demuxer-lavf-buffersize=1048576',
+      '--hls-bitrate=max',
+      '--ytdl-format=bestvideo+bestaudio/best',
       // Timeout de rede do proprio mpv/ffmpeg pra streams travados (protocolo
       // lavf, usado por http/https/hls) — reduzido do padrao (60s) pra
       // detectar uma conexao morta bem mais rapido.
@@ -271,15 +335,27 @@ class MPVPlayer extends EventEmitter {
       // software sozinho se o driver/codec nao suportar) — reduz uso de CPU
       // e ajuda a evitar frames perdidos, principalmente em live 1080p.
       '--hwdec=auto-safe',
-      // Por padrao o mpv usa apresentacao "flip model" no D3D11 (entrega os
-      // frames direto pra GPU/compositor), que a maioria dos softwares de
-      // captura de tela (Discord, OBS, etc.) nao consegue enxergar e mostra
-      // como video preto. Desligar o flip forca o modelo antigo (blit), que
-      // e capturavel por qualquer metodo, ao custo de uma vsync um pouco
-      // menos eficiente — imperceptivel pra reproducao de video.
+      // Renderizador GPU via Direct3D 11
       '--vo=gpu',
       '--gpu-context=d3d11',
       '--d3d11-flip=no',
+      // Otimização de cores e dithering temporal/espacial
+      '--dither-depth=auto',
+      '--dither=fruit',
+      '--temporal-dither=yes',
+      // Filtro anti-banding (deband)
+      `--deband=${this.videoDeband ? 'yes' : 'no'}`,
+      '--deband-iterations=4',
+      '--deband-threshold=48',
+      '--deband-range=16',
+      '--deband-grain=24',
+      // Algoritmos de escalonamento conforme o perfil ativo
+      `--scale=${prof.scale}`,
+      `--cscale=${prof.cscale}`,
+      `--dscale=${prof.dscale}`,
+      `--correct-downscaling=${prof.correctDownscaling}`,
+      `--linear-downscaling=${prof.linearDownscaling}`,
+      `--sigmoid-upscaling=${prof.sigmoidUpscaling}`,
       `--video-aspect-override=${this.fitMode.aspect}`,
       `--panscan=${this.fitMode.panscan}`,
     ];
@@ -420,6 +496,17 @@ class MPVPlayer extends EventEmitter {
       const s = this.state;
       const idle = await this.getProperty('idle-active', true);
       if (idle) {
+        // Se ainda estiver no processo de carregamento/handshake inicial, não trata como queda de conexão
+        if (this._loading && Date.now() < this._loadingDeadline) {
+          this.emit('status', {
+            idle: false,
+            buffering: true,
+            isLive: s.isLive,
+            dvrMode: s.dvrMode,
+            state: this.getState(),
+          });
+          return;
+        }
         // Com --keep-open=yes o mpv nunca fica idle-active ao terminar um
         // arquivo normalmente (so pausa no ultimo frame) — entao ficar idle
         // com um currentTarget ainda setado significa que a transmissao caiu
@@ -441,7 +528,6 @@ class MPVPlayer extends EventEmitter {
           // disparava outra tentativa por cima a cada tick (stop/loadFile
           // empilhados e conflitando entre si), deixando o player instavel.
           if (!this._reconnect.pending) {
-            this.command(['stop']).catch(()=>{});
             this._reconnect.scheduleAttempt(
               () => this.currentTarget && !s.stopRequested && !s.quitting,
               () => this.loadFile(this.currentTarget, { internal: true })
@@ -474,7 +560,7 @@ class MPVPlayer extends EventEmitter {
       }
       this._exhaustedNotified = false;
       this._reconnect.reset();
-      const [position, duration, paused, buffering, volume, mute, subVisible, cacheTime, partiallySeekable, fps, droppedFrames, bitrate, downloadSpeed, videoWidth, videoHeight, cacheState, audioBitrate] = await Promise.all([
+      const [position, duration, paused, buffering, volume, mute, subVisible, cacheTime, partiallySeekable, fps, droppedFrames, bitrate, downloadSpeed, videoWidth, videoHeight, cacheState, audioBitrate, trackCount] = await Promise.all([
         this.getProperty('time-pos', 0),
         this.getProperty('duration', 0),
         this.getProperty('pause', false),
@@ -500,7 +586,13 @@ class MPVPlayer extends EventEmitter {
         // NetworkMonitor pra medias moveis/estabilidade (Live Engine).
         this.getProperty('demuxer-cache-state', null),
         this.getProperty('audio-bitrate', null),
+        this.getProperty('track-list/count', 0),
       ]);
+      if (trackCount && trackCount !== this._lastTrackCount) {
+        this._lastTrackCount = trackCount;
+        this._extractTracks();
+        this._logMediaDiagnostics();
+      }
       s.buffering = !!buffering;
 
       if (process.env.AURA_DEBUG_LIVE) {
@@ -510,10 +602,8 @@ class MPVPlayer extends EventEmitter {
         logger.live(`debug pos=${position?.toFixed(2)} dur=${duration?.toFixed(2)} diff=${diff?.toFixed(3)} cacheTime=${cacheTime?.toFixed(2)} partSeek=${partiallySeekable} isLive=${s.isLive} msSinceGrowth=${this._liveDetector.msSinceGrowth}`);
       }
 
-      // Detecção de live: a duração real de uma live cresce a cada tick (a
-      // transmissão vai avançando). "partially-seekable" sozinho NÃO é um
-      // Detecção de live robusta: se a duração flutua ou se a stream é parcialmente procurável
-      const liveChange = this._liveDetector.update(duration, s.isLive, s.liveModeLocked);
+      // Detecção de live robusta: se a duração cresce continuamente em tempo real
+      const liveChange = this._liveDetector.update(duration, s.isLive, s.liveModeLocked, this._treatAsFinite);
       if (liveChange === 'became-live') {
         s.isLive = true;
         s.dvrMode = false;
@@ -544,15 +634,14 @@ class MPVPlayer extends EventEmitter {
         this._logMediaDiagnostics();
         logger.live('Stream detectado como AO VIVO.');
       } else if (liveChange === 'became-not-live') {
-        // Duração parou de crescer por alguns segundos: nao e (ou nao e mais) live
+        // Duração estável / VOD confirmado: não é (ou deixou de ser) live
         s.isLive = false;
         s.dvrMode = false;
         this.command(['set_property', 'cache-pause', true]).catch(()=>{});
         this.command(['set_property', 'speed', 1.0]).catch(()=>{});
         this.command(['set_property', 'demuxer-readahead-secs', 60]).catch(()=>{});
-        this._lastReadaheadSecs = null;
-        this.emit('tracks', { video: [], audio: [], sub: [] }); // limpa trilhas
-        logger.live('Stream deixou de ser AO VIVO.');
+        this._lastReadaheadSecs = 60;
+        logger.live('Stream detectado/confirmado como VOD (não é Ao Vivo).');
       }
 
       let liveHealth = 'good';
@@ -838,13 +927,48 @@ class MPVPlayer extends EventEmitter {
     };
   }
 
-  // Diagnostico temporario: dump de todas as faixas (video/audio/legenda —
-  // idioma, codec, resolucao, bitrate) e da qualidade do que esta tocando de
-  // fato agora. Nao afeta nenhuma decisao do player, so loga.
+  // Diagnóstico aprofundado: dump completo de capítulos, tags de metadados,
+  // faixas (áudio/vídeo/legenda) e qualidade atual.
   async _logMediaDiagnostics() {
     try {
       const info = await this.getMediaInfo();
-      logger.player(`[diagnostico] ${info.tracks.length} faixa(s) em ${info.target}:`);
+      const [chapters, metadata, mediaTitle, fileFormat] = await Promise.all([
+        this.getProperty('chapter-list', []),
+        this.getProperty('metadata', {}),
+        this.getProperty('media-title', null),
+        this.getProperty('file-format', null),
+      ]);
+      logger.player(`[diagnostico] ===== METADADOS DETALHADOS DA MÍDIA =====`);
+      logger.player(`[diagnostico] Destino/URL: ${info.target}`);
+      if (mediaTitle) logger.player(`[diagnostico] Título detectado: "${mediaTitle}" (Formato: ${fileFormat || 'desconhecido'})`);
+
+      // 1. Capítulos
+      if (Array.isArray(chapters) && chapters.length > 0) {
+        logger.player(`[diagnostico] ${chapters.length} capítulo(s) encontrado(s):`);
+        chapters.forEach((c, idx) => {
+          const timeSec = c.time || 0;
+          const m = Math.floor(timeSec / 60);
+          const s = Math.floor(timeSec % 60);
+          const timeStr = `${m}:${String(s).padStart(2, '0')}`;
+          logger.player(`[diagnostico]   Capítulo #${idx + 1} [${timeStr}] - "${c.title || 'Sem título'}"`);
+        });
+      } else {
+        logger.player(`[diagnostico] Nenhum capítulo embutido encontrado.`);
+      }
+
+      // 2. Metadados do contêiner (tags)
+      const metaKeys = Object.keys(metadata || {});
+      if (metaKeys.length > 0) {
+        logger.player(`[diagnostico] ${metaKeys.length} tag(s) de metadados:`);
+        for (const k of metaKeys) {
+          logger.player(`[diagnostico]   tag [${k}]: ${metadata[k]}`);
+        }
+      } else {
+        logger.player(`[diagnostico] Nenhuma tag de metadados no contêiner.`);
+      }
+
+      // 3. Faixas de vídeo/áudio/legenda
+      logger.player(`[diagnostico] ${info.tracks.length} faixa(s):`);
       for (const t of info.tracks) {
         const parts = [`#${t.id}`, t.type];
         if (t.lang) parts.push(`lang=${t.lang}`);
@@ -870,6 +994,7 @@ class MPVPlayer extends EventEmitter {
         `[diagnostico] audio atual: ${a.codec || '?'} ${a.channels || '?'}ch @ ${a.sampleRate || '?'}Hz, ` +
         `${a.bitrate ? Math.round(a.bitrate / 1000) + 'kbps' : 'bitrate desconhecido'}`
       );
+      logger.player(`[diagnostico] =========================================`);
     } catch (err) {
       logger.error('[diagnostico] falha ao coletar informacoes de midia:', err.message);
     }
@@ -1009,6 +1134,8 @@ class MPVPlayer extends EventEmitter {
 
   async loadFile(target, opts = {}) {
     this.currentTarget = target;
+    this._loading = true;
+    this._loadingDeadline = Date.now() + 15000;
     Object.assign(this.state, {
       isLive: false,
       liveModeLocked: false,
@@ -1025,6 +1152,7 @@ class MPVPlayer extends EventEmitter {
     this._watchdogLastPosition = null;
     this._watchdogLastAdvanceAt = null;
     this._lastReadaheadSecs = null;
+    this._lastTrackCount = 0;
     this._lastConfidenceTier = 0;
     this._lastSpeedTier = 'on-target';
     this._lastRecoveringFlag = false;
@@ -1059,26 +1187,87 @@ class MPVPlayer extends EventEmitter {
     // abaixo; pra live, o calculo dinamico por tick assume a partir daqui.
     this._lastReadaheadSecs = 15;
     this.command(['set_property', 'demuxer-readahead-secs', 15]).catch(()=>{});
-    this.emit('load', { target });
-    await this.command(['loadfile', target, 'replace']);
-    const dur = await this._waitForDuration(6000);
-    if (!dur && !this._treatAsFinite) {
-      this.state.isLive = true;
-      // Desativa cache-pause para evitar que o mpv acumule delay propositalmente
-      await this.command(['set_property', 'cache-pause', false]).catch(()=>{});
-    } else {
-      // VOD confirmado: agora sim vale a pena um teto de leitura-adiante
-      // generoso, pra seeks/scrub ficarem suaves.
-      this._lastReadaheadSecs = 60;
-      this.command(['set_property', 'demuxer-readahead-secs', 60]).catch(()=>{});
-      await this._tryResume(target);
-      this._extractTracks();
-      this._logMediaDiagnostics();
+    try {
+      this.emit('load', { target });
+      await this.command(['loadfile', target, 'replace']);
+      const dur = await this._waitForDuration(6000);
+      if (!dur && !this._treatAsFinite) {
+        this.state.isLive = true;
+        // Desativa cache-pause para evitar que o mpv acumule delay propositalmente
+        await this.command(['set_property', 'cache-pause', false]).catch(()=>{});
+      } else {
+        this.state.isLive = false;
+        // VOD confirmado: agora sim vale a pena um teto de leitura-adiante
+        // generoso, pra seeks/scrub ficarem suaves.
+        this._lastReadaheadSecs = 60;
+        this.command(['set_property', 'demuxer-readahead-secs', 60]).catch(()=>{});
+        await this._tryResume(target);
+        this._extractTracks();
+        this._logMediaDiagnostics();
+      }
+      // video-aspect-override/panscan sao recalculados quando o video muda,
+      // entao reaplicamos o modo de ajuste escolhido pelo usuario por garantia.
+      await this.applyFitMode(this.fitMode).catch(() => {});
+      await Promise.all([
+        this.command(['set_property', 'brightness', this.brightness]).catch(()=>{}),
+        this.command(['set_property', 'contrast', this.contrast]).catch(()=>{}),
+        this.command(['set_property', 'audio-delay', this.audioDelaySecs]).catch(()=>{}),
+        this._applyAudioFilters().catch(()=>{}),
+      ]);
+    } finally {
+      this._loading = false;
     }
-    // video-aspect-override/panscan sao recalculados quando o video muda,
-    // entao reaplicamos o modo de ajuste escolhido pelo usuario por garantia.
-    await this.applyFitMode(this.fitMode).catch(() => {});
     return true;
+  }
+
+  async _applyAudioFilters() {
+    if (!this.isRunning()) return;
+    const filters = [];
+    if (this.audioNightMode) filters.push(NIGHT_MODE_FILTER);
+    const preset = AUDIO_PRESETS[this.audioPreset];
+    if (preset && preset.filter) filters.push(preset.filter);
+    const filterStr = filters.join(',');
+    await this.command(['set_property', 'af', filterStr]).catch(()=>{});
+  }
+
+  async setBrightness(val) {
+    const num = Math.max(-100, Math.min(100, Math.round(Number(val) || 0)));
+    this.brightness = num;
+    if (this.isRunning()) {
+      await this.command(['set_property', 'brightness', num]).catch(()=>{});
+    }
+    return this.brightness;
+  }
+
+  async setContrast(val) {
+    const num = Math.max(-100, Math.min(100, Math.round(Number(val) || 0)));
+    this.contrast = num;
+    if (this.isRunning()) {
+      await this.command(['set_property', 'contrast', num]).catch(()=>{});
+    }
+    return this.contrast;
+  }
+
+  async setNightMode(enabled) {
+    this.audioNightMode = !!enabled;
+    await this._applyAudioFilters();
+    return this.audioNightMode;
+  }
+
+  async setAudioDelay(secs) {
+    const val = Math.max(-10, Math.min(10, Number(secs) || 0));
+    this.audioDelaySecs = val;
+    if (this.isRunning()) {
+      await this.command(['set_property', 'audio-delay', val]).catch(()=>{});
+    }
+    return this.audioDelaySecs;
+  }
+
+  async setAudioPreset(presetId) {
+    const pid = AUDIO_PRESETS[presetId] ? presetId : 'flat';
+    this.audioPreset = pid;
+    await this._applyAudioFilters();
+    return this.audioPreset;
   }
 
   play() {
@@ -1110,6 +1299,30 @@ class MPVPlayer extends EventEmitter {
     this._buffer.setCustomTarget(secs);
   }
 
+  // Perfil de qualidade de imagem (Configuracoes > Player): high/ultra/performance.
+  async setVideoQualityProfile(profileId) {
+    const prof = VIDEO_QUALITY_PROFILES[profileId] || VIDEO_QUALITY_PROFILES.high;
+    this.videoQualityProfile = prof.id;
+    if (this.isRunning()) {
+      await Promise.all([
+        this.command(['set_property', 'scale', prof.scale]).catch(()=>{}),
+        this.command(['set_property', 'cscale', prof.cscale]).catch(()=>{}),
+        this.command(['set_property', 'dscale', prof.dscale]).catch(()=>{}),
+        this.command(['set_property', 'correct-downscaling', prof.correctDownscaling === 'yes']).catch(()=>{}),
+        this.command(['set_property', 'linear-downscaling', prof.linearDownscaling === 'yes']).catch(()=>{}),
+        this.command(['set_property', 'sigmoid-upscaling', prof.sigmoidUpscaling === 'yes']).catch(()=>{}),
+      ]);
+    }
+  }
+
+  // Filtro anti-banding (Configuracoes > Player): suaviza transições de cores em videos comprimidos (DLNA).
+  async setVideoDeband(enabled) {
+    this.videoDeband = !!enabled;
+    if (this.isRunning()) {
+      await this.command(['set_property', 'deband', this.videoDeband]).catch(()=>{});
+    }
+  }
+
   pause() {
     return this.command(['set_property', 'pause', true]);
   }
@@ -1124,6 +1337,9 @@ class MPVPlayer extends EventEmitter {
   }
 
   stop() {
+    this._loading = false;
+    this._loadingDeadline = 0;
+    this.currentTarget = null;
     Object.assign(this.state, {
       stopRequested: true,
       isLive: false,

@@ -337,6 +337,7 @@ class DlnaRenderer extends EventEmitter {
     this.interfaceName = iface.name;
     this.currentUri = '';
     this.currentTitle = null;
+    this.currentURIMetaData = '';
 
     // Se algo diferente do que a gente mandou tocar via DLNA comecar a
     // rodar (ex.: usuario abriu um arquivo local pela aba "Arquivos locais"),
@@ -353,6 +354,11 @@ class DlnaRenderer extends EventEmitter {
 
   _emitSource(remote, title) {
     this.emit('source', { remote: remote || null, title: title || null });
+  }
+
+  setFriendlyName(name) {
+    const clean = typeof name === 'string' ? name.trim() : '';
+    this.friendlyName = clean || `${os.hostname()} (Player)`;
   }
 
   getStatus() {
@@ -577,6 +583,7 @@ class DlnaRenderer extends EventEmitter {
             throw new Error('CurrentURI precisa ser http:// ou https://');
           }
           this.currentUri = requestedUri;
+          this.currentURIMetaData = args.CurrentURIMetaData || '';
           const { title, subtitleUrl } = parseDidlMetadata(args.CurrentURIMetaData);
           // Debug temporario: log completo do que o celular manda, pra
           // entender o formato real (upnp:class, protocolInfo, duration
@@ -608,6 +615,7 @@ class DlnaRenderer extends EventEmitter {
           await player.stop();
           this.currentUri = '';
           this.currentTitle = null;
+          this.currentURIMetaData = '';
           this._emitSource(null, null);
           return {};
         case 'Seek': {
@@ -617,19 +625,29 @@ class DlnaRenderer extends EventEmitter {
         }
         case 'GetTransportInfo': {
           const idle = await player.getProperty('idle-active', true);
-          const paused = await player.getProperty('pause', true);
-          const state = idle ? 'STOPPED' : paused ? 'PAUSED_PLAYBACK' : 'PLAYING';
+          const paused = await player.getProperty('pause', false);
+          let state = 'STOPPED';
+          if (this.currentUri) {
+            if (player._loading) {
+              state = 'TRANSITIONING';
+            } else if (!idle) {
+              state = paused ? 'PAUSED_PLAYBACK' : 'PLAYING';
+            } else {
+              state = 'TRANSITIONING';
+            }
+          }
           return { CurrentTransportState: state, CurrentTransportStatus: 'OK', CurrentSpeed: '1' };
         }
         case 'GetPositionInfo': {
           const pos = await player.getProperty('time-pos', 0);
           const dur = await player.getProperty('duration', 0);
           const relTime = formatTime(pos);
+          const trackDur = formatTime(dur);
           return {
             Track: '1',
-            TrackDuration: formatTime(dur),
-            TrackMetaData: '',
-            TrackURI: this.currentUri,
+            TrackDuration: trackDur,
+            TrackMetaData: this.currentURIMetaData || '',
+            TrackURI: this.currentUri || '',
             RelTime: relTime,
             AbsTime: relTime,
             RelCount: '2147483647',
@@ -641,8 +659,8 @@ class DlnaRenderer extends EventEmitter {
           return {
             NrTracks: this.currentUri ? '1' : '0',
             MediaDuration: formatTime(dur),
-            CurrentURI: this.currentUri,
-            CurrentURIMetaData: '',
+            CurrentURI: this.currentUri || '',
+            CurrentURIMetaData: this.currentURIMetaData || '',
             NextURI: '',
             NextURIMetaData: '',
             PlayMedium: 'NETWORK',

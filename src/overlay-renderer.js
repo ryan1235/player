@@ -14,9 +14,16 @@ const qualityContainer = document.getElementById('ov-quality-container');
 const btnQuality = document.getElementById('ov-btn-quality');
 const qualityMenu = document.getElementById('ov-quality-menu');
 const dvrBtn = document.getElementById('ov-live-dvr-btn');
+const btnPip = document.getElementById('btn-pip');
 const btnFullscreen = document.getElementById('btn-fullscreen');
 const iconFsEnter = document.getElementById('icon-fs-enter');
 const iconFsExit = document.getElementById('icon-fs-exit');
+
+const osdEl = document.getElementById('ov-osd');
+const osdIconEl = document.getElementById('ov-osd-icon');
+const osdTitleEl = document.getElementById('ov-osd-title');
+const osdBarWrap = document.getElementById('ov-osd-bar-wrap');
+const osdBar = document.getElementById('ov-osd-bar');
 
 const timeCurrentEl = document.getElementById('time-current');
 const timeDurationEl = document.getElementById('time-duration');
@@ -28,6 +35,30 @@ const progressThumb = document.getElementById('ov-progress-thumb');
 const tooltipEl = document.getElementById('ov-tooltip');
 
 const qualityInfoEl = document.getElementById('ov-quality-info');
+
+const btnSkipIntro = document.getElementById('btn-skip-intro');
+const progressIntro = document.getElementById('ov-progress-intro');
+const introHud = document.getElementById('ov-intro-hud');
+const btnCloseIntroHud = document.getElementById('btn-close-intro-hud');
+const btnMarkStart = document.getElementById('btn-mark-start');
+const btnMarkEnd = document.getElementById('btn-mark-end');
+const lblIntroStart = document.getElementById('lbl-intro-start');
+const lblIntroEnd = document.getElementById('lbl-intro-end');
+const btnSaveIntro = document.getElementById('btn-save-intro');
+
+const ovSeekFlash = document.getElementById('ov-seek-flash');
+const ovSkipRing = document.getElementById('ov-skip-ring');
+const ovSkipRingBar = document.getElementById('ov-skip-ring-bar');
+const ovSkipText = document.getElementById('ov-skip-text');
+const ovSkipKey = document.getElementById('ov-skip-key');
+const ovSkipCancelHint = document.getElementById('ov-skip-cancel-hint');
+
+let detectedIntro = null;
+let autoSkipIntro = false;
+let hasAutoSkipped = false;
+let autoSkipCancelledForCurrentMedia = false;
+let markedStartSec = null;
+let markedEndSec = null;
 
 const audioWrap = document.getElementById('ov-audio-wrap');
 const btnAudioMenu = document.getElementById('btn-audio-menu');
@@ -236,6 +267,40 @@ document.getElementById('btn-screenshot').addEventListener('click', async () => 
 btnFullscreen.addEventListener('click', () => {
   window.api.toggleFullscreen().catch(() => {});
 });
+
+if (btnPip) {
+  btnPip.addEventListener('click', () => {
+    window.api.togglePip().catch(() => {});
+  });
+}
+
+let osdTimer = null;
+const ICON_VOL_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M4 10v4h4l5 4V6L8 10H4Z" fill="currentColor"/><path d="M17 9a4 4 0 0 1 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const ICON_BRIGHT_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const ICON_FWD_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M13 6l6 6-6 6M19 12h-9a5 5 0 1 0 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_BACK_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M11 6 5 12l6 6M5 12h9a5 5 0 1 1 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function showOsd(iconSvg, title, percent = null) {
+  if (!osdEl) return;
+  osdIconEl.innerHTML = iconSvg;
+  osdTitleEl.textContent = title;
+  if (percent !== null && percent !== undefined) {
+    osdBarWrap.style.display = 'block';
+    osdBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  } else {
+    osdBarWrap.style.display = 'none';
+  }
+  osdEl.hidden = false;
+  void osdEl.offsetWidth;
+  osdEl.classList.add('show');
+  if (osdTimer) clearTimeout(osdTimer);
+  osdTimer = setTimeout(() => {
+    osdEl.classList.remove('show');
+    setTimeout(() => {
+      if (!osdEl.classList.contains('show')) osdEl.hidden = true;
+    }, 200);
+  }, 1200);
+}
 // --- Sistema generico de menus dropdown (Qualidade/Proporção/Áudio/
 // Legenda/Velocidade/Mais) — abrir um fecha os outros, clique fora fecha,
 // Escape fecha. Substitui o padrao antigo onde cada menu tinha sua propria
@@ -319,21 +384,128 @@ window.api.getFitModes().then(({ modes, current }) => {
   renderFitMenu();
 });
 
-// --- Menu de Áudio (contextual: só aparece com 2+ faixas) ---
+// --- Menu de Áudio Avançado (Faixas + Modo Noturno + Delay + Equalizador) ---
 let audioTracks = [];
+let audioNightMode = false;
+let audioDelaySecs = 0;
+let audioPreset = 'flat';
+
+const AUDIO_PRESETS_UI = [
+  { id: 'flat', label: 'Padrão (Sem filtros)' },
+  { id: 'cinema', label: 'Modo Cinema' },
+  { id: 'dialogue', label: 'Voz Clara (Diálogos)' },
+  { id: 'bass', label: 'Reforço de Graves' },
+  { id: 'music', label: 'Música' },
+];
+
+async function initAudioSettings() {
+  try {
+    audioNightMode = await window.api.getNightMode();
+    audioDelaySecs = await window.api.getAudioDelay();
+    audioPreset = await window.api.getAudioPreset();
+  } catch {}
+}
+initAudioSettings();
+
 function renderAudioMenu() {
   audioMenu.innerHTML = '';
-  audioTracks.forEach((t) => {
+
+  // 1. Faixas de áudio (se houver mais de 1)
+  if (audioTracks.length > 1) {
+    const secTracks = document.createElement('div');
+    secTracks.className = 'ov-menu-section-header';
+    secTracks.textContent = 'Faixas de Áudio';
+    audioMenu.appendChild(secTracks);
+
+    audioTracks.forEach((t) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'ov-menu-item' + (t.selected ? ' active' : '');
+      item.setAttribute('role', 'menuitemradio');
+      item.setAttribute('aria-checked', t.selected ? 'true' : 'false');
+      item.innerHTML = `<span>${trackLabel(t)}</span><span class="ov-menu-check">✓</span>`;
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.api.setAudioTrack(t.id).catch(() => {});
+        closeDropdowns();
+      });
+      audioMenu.appendChild(item);
+    });
+
+    const div1 = document.createElement('div');
+    div1.className = 'ov-menu-divider';
+    audioMenu.appendChild(div1);
+  }
+
+  // 2. Ajustes de áudio (Modo Noturno e Delay)
+  const secProc = document.createElement('div');
+  secProc.className = 'ov-menu-section-header';
+  secProc.textContent = 'Ajustes de Áudio';
+  audioMenu.appendChild(secProc);
+
+  // Modo Noturno (Voz clara / Compressão dinâmica)
+  const nightItem = document.createElement('button');
+  nightItem.type = 'button';
+  nightItem.className = 'ov-menu-item' + (audioNightMode ? ' active' : '');
+  nightItem.innerHTML = `<span>Modo Noturno (Voz Clara)</span><span class="ov-menu-check">${audioNightMode ? 'ON' : 'OFF'}</span>`;
+  nightItem.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    audioNightMode = !audioNightMode;
+    await window.api.setNightMode(audioNightMode);
+    renderAudioMenu();
+    showOsd(ICON_VOL_SVG, `Modo Noturno: ${audioNightMode ? 'Ativado' : 'Desativado'}`);
+  });
+  audioMenu.appendChild(nightItem);
+
+  // Sincronia / Delay de áudio
+  const delayRow = document.createElement('div');
+  delayRow.className = 'ov-menu-control-row';
+  const delayMs = Math.round(audioDelaySecs * 1000);
+  delayRow.innerHTML = `
+    <span>Sincronia (Delay)</span>
+    <div class="ov-menu-stepper">
+      <button type="button" class="ov-menu-stepper-btn" id="btn-delay-dec" title="-50ms">-</button>
+      <span class="ov-menu-stepper-val">${delayMs > 0 ? '+' : ''}${delayMs}ms</span>
+      <button type="button" class="ov-menu-stepper-btn" id="btn-delay-inc" title="+50ms">+</button>
+    </div>
+  `;
+  delayRow.querySelector('#btn-delay-dec').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    audioDelaySecs = Math.max(-5, Math.round((audioDelaySecs - 0.05) * 100) / 100);
+    await window.api.setAudioDelay(audioDelaySecs);
+    renderAudioMenu();
+    showOsd(ICON_VOL_SVG, `Delay de Áudio: ${Math.round(audioDelaySecs * 1000)}ms`);
+  });
+  delayRow.querySelector('#btn-delay-inc').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    audioDelaySecs = Math.min(5, Math.round((audioDelaySecs + 0.05) * 100) / 100);
+    await window.api.setAudioDelay(audioDelaySecs);
+    renderAudioMenu();
+    showOsd(ICON_VOL_SVG, `Delay de Áudio: ${Math.round(audioDelaySecs * 1000)}ms`);
+  });
+  audioMenu.appendChild(delayRow);
+
+  // 3. Equalizador & Presets
+  const div2 = document.createElement('div');
+  div2.className = 'ov-menu-divider';
+  audioMenu.appendChild(div2);
+
+  const secEq = document.createElement('div');
+  secEq.className = 'ov-menu-section-header';
+  secEq.textContent = 'Equalizador';
+  audioMenu.appendChild(secEq);
+
+  AUDIO_PRESETS_UI.forEach((p) => {
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = 'ov-menu-item' + (t.selected ? ' active' : '');
-    item.setAttribute('role', 'menuitemradio');
-    item.setAttribute('aria-checked', t.selected ? 'true' : 'false');
-    item.innerHTML = `<span>${trackLabel(t)}</span><span class="ov-menu-check">✓</span>`;
-    item.addEventListener('click', (e) => {
+    item.className = 'ov-menu-item' + (audioPreset === p.id ? ' active' : '');
+    item.innerHTML = `<span>${p.label}</span><span class="ov-menu-check">✓</span>`;
+    item.addEventListener('click', async (e) => {
       e.stopPropagation();
-      window.api.setAudioTrack(t.id).catch(() => {});
-      closeDropdowns();
+      audioPreset = p.id;
+      await window.api.setAudioPreset(p.id);
+      renderAudioMenu();
+      showOsd(ICON_VOL_SVG, `Equalizador: ${p.label}`);
     });
     audioMenu.appendChild(item);
   });
@@ -409,6 +581,7 @@ let currentTargetUrl = null;
 function renderMoreMenu() {
   moreMenu.innerHTML = '';
   const items = [
+    { label: 'Marcar Abertura (Episódio 1)', onClick: () => { introHud.hidden = false; } },
     { label: 'Forçar modo VOD/Live', onClick: () => window.api.toggleLiveMode() },
     { label: 'Informações', onClick: () => openInfoModal() },
     { label: 'Estatísticas', onClick: () => openStatsModal() },
@@ -544,9 +717,46 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'Escape') {
-    if (modalOpen) closeModal();
-    else if (openDropdownId) closeDropdowns();
+    if (modalOpen) { closeModal(); return; }
+    if (openDropdownId) { closeDropdowns(); return; }
+    if (!btnSkipIntro.hidden && autoSkipIntro && !autoSkipCancelledForCurrentMedia && (position || 0) < (detectedIntro?.startTime || 0)) {
+      autoSkipCancelledForCurrentMedia = true;
+      if (ovSkipRing) ovSkipRing.hidden = true;
+      if (ovSkipText) ovSkipText.textContent = 'Pular Abertura';
+      if (ovSkipCancelHint) ovSkipCancelHint.hidden = true;
+      if (ovSkipKey) ovSkipKey.hidden = false;
+      showToast('⚡ Auto-skip cancelado (Abertura mantida)');
+      return;
+    }
     return;
+  }
+  if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    window.api.togglePip().catch(() => {});
+    return;
+  }
+  if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    skipIntroAction();
+    return;
+  }
+  if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (introHud && !introHud.hidden) {
+      window.api.markIntroStart().then((pos) => {
+        markedStartSec = pos;
+        updateIntroHudUI();
+        showToast(`Início marcado: ${formatClock(pos)}`);
+      });
+      return;
+    }
+  }
+  if ((e.key === 'o' || e.key === 'O') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (introHud && !introHud.hidden) {
+      window.api.markIntroEnd().then((pos) => {
+        markedEndSec = pos;
+        updateIntroHudUI();
+        showToast(`Fim marcado: ${formatClock(pos)}`);
+      });
+      return;
+    }
   }
   if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.altKey && !e.metaKey) {
     if (fitModes && fitModes.length > 0) {
@@ -745,6 +955,11 @@ window.api.onPlayerStatus((info) => {
     ovRoot.classList.remove('ov-live');
     ovRoot.classList.remove('ov-dvr');
     dvrBtn.classList.add('ov-hidden');
+    const statsEl = document.getElementById('ov-live-stats');
+    if (statsEl) {
+      statsEl.textContent = '';
+      statsEl.className = 'ov-live-stats';
+    }
   }
 
   if (!scrubbing) {
@@ -752,8 +967,14 @@ window.api.onPlayerStatus((info) => {
     renderProgress(duration ? position / duration : 0);
     timeCurrentEl.textContent = formatClock(position);
   }
-  const bufferedPct = duration ? Math.min(100, (info.cacheTime / duration) * 100) : 0;
-  progressBuffered.style.width = bufferedPct + '%';
+  if (!info.isLive && duration > 0) {
+    const cacheSecs = typeof info.cacheTime === 'number' ? info.cacheTime : 0;
+    const bufferedEnd = (info.position || 0) + cacheSecs;
+    const bufferedPct = Math.min(100, Math.max(0, (bufferedEnd / duration) * 100));
+    progressBuffered.style.width = bufferedPct + '%';
+  } else {
+    progressBuffered.style.width = '0%';
+  }
   timeDurationEl.textContent = formatClock(duration);
   lastSubVisible = !!info.subVisible;
 
@@ -773,13 +994,181 @@ window.api.onPlayerStatus((info) => {
   if (!scrubbing && document.activeElement !== volumeEl) {
     volumeEl.value = info.volume ?? volumeEl.value;
   }
+
+  // Verificação e exibição do botão Pular Abertura (aparece 5s antes do início e some no final ou ao pular)
+  if (detectedIntro && !info.isLive && duration > 0) {
+    const pos = info.position || 0;
+    const startWindow = Math.max(0, detectedIntro.startTime - 5);
+    const endWindow = detectedIntro.endTime;
+
+    if (pos >= startWindow && pos < endWindow) {
+      btnSkipIntro.hidden = false;
+
+      // Contagem regressiva se autoSkipIntro estiver ativo e o usuário estiver nos 5s antes do início
+      if (autoSkipIntro && !autoSkipCancelledForCurrentMedia && pos < detectedIntro.startTime) {
+        const remainingSec = Math.max(0, detectedIntro.startTime - pos);
+        const progressPct = Math.min(1, Math.max(0, (5 - remainingSec) / 5)); // 0.0 a 1.0
+        const circumference = 81.68;
+        if (ovSkipRing) ovSkipRing.hidden = false;
+        if (ovSkipRingBar) ovSkipRingBar.style.strokeDashoffset = String(circumference * (1 - progressPct));
+        if (ovSkipText) ovSkipText.textContent = `Pular em ${Math.ceil(remainingSec)}s`;
+        if (ovSkipCancelHint) ovSkipCancelHint.hidden = false;
+        if (ovSkipKey) ovSkipKey.hidden = true;
+      } else {
+        if (ovSkipRing) ovSkipRing.hidden = true;
+        if (ovSkipText) ovSkipText.textContent = 'Pular Abertura';
+        if (ovSkipCancelHint) ovSkipCancelHint.hidden = true;
+        if (ovSkipKey) ovSkipKey.hidden = false;
+      }
+
+      // Disparo do pulo automático ao atingir o início exato da abertura
+      if (autoSkipIntro && !hasAutoSkipped && !autoSkipCancelledForCurrentMedia && pos >= detectedIntro.startTime) {
+        hasAutoSkipped = true;
+        skipIntroAction();
+      }
+    } else {
+      btnSkipIntro.hidden = true;
+    }
+  } else {
+    btnSkipIntro.hidden = true;
+  }
 });
+
+// --- Sistema de Reconhecimento e Pular Aberturas ---
+window.api.getAutoSkipIntro().then(v => { autoSkipIntro = !!v; }).catch(() => {});
+window.api.onAutoSkipIntroChanged(v => { autoSkipIntro = !!v; });
+
+function updateIntroMarker(info) {
+  detectedIntro = info;
+  hasAutoSkipped = false;
+  autoSkipCancelledForCurrentMedia = false;
+  if (info && typeof info.startTime === 'number' && duration > 0) {
+    const leftPct = (info.startTime / duration) * 100;
+    const widthPct = Math.max(1, ((info.endTime - info.startTime) / duration) * 100);
+    progressIntro.style.left = leftPct + '%';
+    progressIntro.style.width = widthPct + '%';
+    progressIntro.hidden = false;
+  } else {
+    progressIntro.hidden = true;
+    btnSkipIntro.hidden = true;
+  }
+}
+
+window.api.getIntroDetected().then(info => updateIntroMarker(info)).catch(() => {});
+window.api.onIntroDetected(info => updateIntroMarker(info));
+
+if (window.api.onIntroDiffDetected) {
+  window.api.onIntroDiffDetected((data) => {
+    showToast(`🎵 Abertura diferente de "${data?.recentTitle || 'Salva'}"? Abra o menu (...) para marcar a OP 2.`);
+  });
+}
+
+function skipIntroAction() {
+  if (ovSeekFlash) {
+    ovSeekFlash.classList.add('active');
+    setTimeout(() => ovSeekFlash.classList.remove('active'), 180);
+  }
+  if (detectedIntro && typeof detectedIntro.endTime === 'number') {
+    const currentPos = position || 0;
+    const seekDelta = detectedIntro.endTime - currentPos;
+    if (seekDelta > 0) {
+      window.api.seek(seekDelta).catch(() => {});
+    }
+    btnSkipIntro.hidden = true;
+    showToast(`⚡ Abertura pulada (${Math.round(detectedIntro.duration || seekDelta)}s)`);
+  } else {
+    window.api.seek(85).catch(() => {});
+    showToast('⚡ Pulou 85s (Abertura)');
+  }
+}
+
+if (btnSkipIntro) {
+  btnSkipIntro.addEventListener('click', (e) => {
+    e.stopPropagation();
+    skipIntroAction();
+  });
+}
+
+if (btnCloseIntroHud) {
+  btnCloseIntroHud.addEventListener('click', () => {
+    introHud.hidden = true;
+  });
+}
+
+function updateIntroHudUI() {
+  if (markedStartSec !== null) {
+    lblIntroStart.textContent = formatClock(markedStartSec);
+    btnMarkStart.classList.add('marked');
+  } else {
+    lblIntroStart.textContent = '--:--';
+    btnMarkStart.classList.remove('marked');
+  }
+  if (markedEndSec !== null) {
+    lblIntroEnd.textContent = formatClock(markedEndSec);
+    btnMarkEnd.classList.add('marked');
+  } else {
+    lblIntroEnd.textContent = '--:--';
+    btnMarkEnd.classList.remove('marked');
+  }
+  if (markedStartSec !== null && markedEndSec !== null && markedEndSec > markedStartSec) {
+    btnSaveIntro.disabled = false;
+    const dur = Math.round(markedEndSec - markedStartSec);
+    btnSaveIntro.textContent = `💾 Salvar Assinatura (${dur}s)`;
+  } else {
+    btnSaveIntro.disabled = true;
+    btnSaveIntro.textContent = '💾 Salvar & Extrair Assinatura';
+  }
+}
+
+if (btnMarkStart) {
+  btnMarkStart.addEventListener('click', async () => {
+    const pos = await window.api.markIntroStart();
+    markedStartSec = pos;
+    updateIntroHudUI();
+    showToast(`Início marcado: ${formatClock(pos)}`);
+  });
+}
+
+if (btnMarkEnd) {
+  btnMarkEnd.addEventListener('click', async () => {
+    const pos = await window.api.markIntroEnd();
+    markedEndSec = pos;
+    updateIntroHudUI();
+    showToast(`Fim marcado: ${formatClock(pos)}`);
+  });
+}
+
+if (btnSaveIntro) {
+  btnSaveIntro.addEventListener('click', async () => {
+    btnSaveIntro.disabled = true;
+    btnSaveIntro.textContent = 'Extraindo áudio da abertura...';
+    try {
+      await window.api.saveIntroProfile();
+      showToast('✅ Assinatura de áudio aprendida para os próximos episódios!');
+      introHud.hidden = true;
+      markedStartSec = null;
+      markedEndSec = null;
+      updateIntroHudUI();
+    } catch (err) {
+      showToast(`Erro: ${err.message}`);
+      updateIntroHudUI();
+    }
+  });
+}
 
 // --- Mostrar/esconder controles automaticamente ---
 let idleTimer = null;
 
 function showControls() {
+  document.documentElement.classList.remove('idle');
+  document.body.classList.remove('idle');
   ovRoot.classList.remove('idle');
+}
+
+function setIdle() {
+  document.documentElement.classList.add('idle');
+  document.body.classList.add('idle');
+  ovRoot.classList.add('idle');
 }
 
 function clearIdleTimer() {
@@ -792,8 +1181,10 @@ function armIdleTimer() {
   showControls();
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
-    if (!lastPaused && !openDropdownId && !modalOpen) ovRoot.classList.add('idle');
-  }, 3000);
+    if (!lastPaused && !openDropdownId && !modalOpen) {
+      setIdle();
+    }
+  }, 2500);
 }
 
 window.addEventListener('mousemove', () => {
@@ -814,28 +1205,89 @@ ovRoot.addEventListener('click', (e) => {
   if (ovRoot.classList.contains('idle')) {
     armIdleTimer();
   } else if (!lastPaused) {
-    ovRoot.classList.add('idle');
+    setIdle();
     clearTimeout(idleTimer);
   }
 });
 
-// Duplo clique no vídeo alterna tela cheia e a roda do mouse ajusta o volume
-// — gestos convencionais que o mpv ofereceria nativamente, mas que dependiam
-// do clique atravessar o overlay (removido por travar o mouse as vezes).
+// Duplo clique no vídeo alterna tela cheia
 ovRoot.addEventListener('dblclick', (e) => {
   if (e.target !== ovRoot) return;
   window.api.toggleFullscreen().catch(() => {});
 });
 
+// Gestos do mouse:
+// - Roda no lado direito: Ajustar volume (0-150%) com OSD
+// - Roda no lado esquerdo: Ajustar brilho do vídeo (-100 a +100%) com OSD
+let currentBrightness = 0;
+window.api.getBrightness().then((b) => { currentBrightness = b || 0; }).catch(() => {});
+
 ovRoot.addEventListener(
   'wheel',
   (e) => {
+    if (e.target.closest('.ov-bottom') || e.target.closest('.ov-menu') || e.target.closest('.ov-modal')) return;
     e.preventDefault();
-    const next = Math.min(150, Math.max(0, Number(volumeEl.value) + (e.deltaY < 0 ? 5 : -5)));
-    window.api.setVolume(next).catch(() => {});
+    armIdleTimer();
+    const isRightSide = e.clientX >= window.innerWidth / 2;
+    if (isRightSide) {
+      const step = e.deltaY < 0 ? 5 : -5;
+      const next = Math.min(150, Math.max(0, Number(volumeEl.value) + step));
+      volumeEl.value = next;
+      window.api.setVolume(next).catch(() => {});
+      showOsd(ICON_VOL_SVG, `Volume: ${next}%`, (next / 150) * 100);
+    } else {
+      const step = e.deltaY < 0 ? 5 : -5;
+      currentBrightness = Math.max(-100, Math.min(100, currentBrightness + step));
+      window.api.setBrightness(currentBrightness).catch(() => {});
+      const displayPercent = Math.round(((currentBrightness + 100) / 200) * 100);
+      showOsd(ICON_BRIGHT_SVG, `Brilho: ${currentBrightness > 0 ? '+' : ''}${currentBrightness}%`, displayPercent);
+    }
   },
   { passive: false }
 );
+
+// Gesto de Arraste Horizontal para Busca Rápida (Click & Drag Seek)
+let dragStartX = null;
+let dragStartY = null;
+let isDraggingSeek = false;
+let dragSeekDelta = 0;
+
+ovRoot.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  if (e.target.closest('.ov-bottom') || e.target.closest('.ov-top') || e.target.closest('.ov-menu') || e.target.closest('.ov-modal')) return;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  isDraggingSeek = false;
+  dragSeekDelta = 0;
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (dragStartX === null) return;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
+  if (!isDraggingSeek && Math.abs(dx) > 15 && Math.abs(dx) > Math.abs(dy)) {
+    isDraggingSeek = true;
+  }
+  if (isDraggingSeek) {
+    const fraction = dx / Math.max(300, window.innerWidth);
+    dragSeekDelta = Math.round(fraction * 120);
+    const targetPos = Math.max(0, Math.min(duration || Infinity, (position || 0) + dragSeekDelta));
+    showOsd(
+      dragSeekDelta >= 0 ? ICON_FWD_SVG : ICON_BACK_SVG,
+      `${dragSeekDelta >= 0 ? '+' : ''}${dragSeekDelta}s (${formatClock(targetPos)})`
+    );
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  if (isDraggingSeek && dragSeekDelta !== 0) {
+    window.api.seek(dragSeekDelta).catch(() => {});
+  }
+  dragStartX = null;
+  dragStartY = null;
+  isDraggingSeek = false;
+  dragSeekDelta = 0;
+});
 
 window.api.onPlayerTracks((tracksInfo) => {
   if (!tracksInfo) return;
@@ -850,9 +1302,8 @@ window.api.onPlayerTracks((tracksInfo) => {
   }
 
   audioTracks = tracksInfo.audio || [];
-  const audioHidden = audioTracks.length <= 1;
-  audioWrap.hidden = audioHidden;
-  if (!audioHidden) renderAudioMenu();
+  audioWrap.hidden = false; // Sempre disponível para acesso ao Modo Noturno, Delay e Equalizador
+  renderAudioMenu();
 
   subtitleTracks = tracksInfo.sub || [];
   const subtitleHidden = subtitleTracks.length === 0;

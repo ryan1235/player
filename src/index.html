@@ -422,17 +422,92 @@
                   <select class="select-input" id="sel-fit-mode"></select>
                 </div>
 
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.qualityProfile.title">Qualidade de vídeo</h4>
+                    <p data-i18n="player.qualityProfile.hint">Algoritmos de nitidez e escalonamento para vídeos e transmissões DLNA.</p>
+                  </div>
+                  <select class="select-input" id="sel-video-quality-profile">
+                    <option value="high" data-i18n="player.qualityProfile.high">Alta Fidelidade (Spline36 · Recomendado)</option>
+                    <option value="ultra" data-i18n="player.qualityProfile.ultra">Ultra (Lanczos · GPU dedicada)</option>
+                    <option value="performance" data-i18n="player.qualityProfile.performance">Desempenho (Bilinear · Econômico)</option>
+                  </select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.deband.title">Filtro Anti-Banding (Deband)</h4>
+                    <p data-i18n="player.deband.hint">Suaviza transições de cores e remove faixas em vídeos comprimidos ou transmitidos via celular/DLNA.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-video-deband" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.audioNightMode.title">Modo Noturno (Voz Clara)</h4>
+                    <p data-i18n="player.audioNightMode.hint">Comprime a faixa dinâmica do áudio, amplificando vozes baixas e reduzindo o impacto de explosões ou músicas altas.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-audio-night-mode" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.audioPreset.title">Perfil de equalizador</h4>
+                    <p data-i18n="player.audioPreset.hint">Ajuste de frequências padrão para filmes, séries e música.</p>
+                  </div>
+                  <select class="select-input" id="sel-audio-preset">
+                    <option value="flat" data-i18n="player.audioPreset.flat">Padrão (Sem filtros)</option>
+                    <option value="cinema" data-i18n="player.audioPreset.cinema">Modo Cinema</option>
+                    <option value="dialogue" data-i18n="player.audioPreset.dialogue">Voz Clara (Diálogos)</option>
+                    <option value="bass" data-i18n="player.audioPreset.bass">Reforço de Graves</option>
+                    <option value="music" data-i18n="player.audioPreset.music">Música</option>
+                  </select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.autoSkipIntro.title">Pular aberturas automaticamente</h4>
+                    <p data-i18n="player.autoSkipIntro.hint">Avança automaticamente a abertura sem precisar clicar quando o intervalo ou padrão sonoro for reconhecido.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-auto-skip-intro" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
                 <div class="setting-card setting-card-stack">
                   <div class="setting-info">
-                    <h4 data-i18n="player.shortcuts.title">Atalhos de teclado</h4>
+                    <h4 data-i18n="player.introProfiles.title">Assinaturas Acústicas & Aberturas Salvas</h4>
+                    <p data-i18n="player.introProfiles.hint">Perfis sonoros e intervalos aprendidos para pular abertura automaticamente em séries e animes.</p>
+                  </div>
+                  <div class="intro-profiles-list" id="intro-profiles-list">
+                    <!-- Gerado dinamicamente -->
+                  </div>
+                </div>
+
+                <div class="setting-card setting-card-stack">
+                  <div class="setting-info">
+                    <h4 data-i18n="player.shortcuts.title">Atalhos e Gestos</h4>
                     <p data-i18n="player.shortcuts.hint">Funcionam quando a aba Player está ativa.</p>
                   </div>
                   <div class="shortcut-list">
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.playPause">Reproduzir / pausar</span><kbd data-i18n="player.shortcuts.space">Espaço</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.back10">Voltar 10s</span><kbd>←</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.fwd10">Avançar 10s</span><kbd>→</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.skipIntro">Pular abertura</span><kbd>S</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.markIntro">Marcar abertura (início / fim)</span><kbd>I / O</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.mute">Mudo</span><kbd>M</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.pip">Picture-in-Picture</span><kbd>P</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.fullscreen">Tela cheia</span><kbd>F</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.wheelRight">Rolar mouse (lado direito)</span><kbd>Volume</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.wheelLeft">Rolar mouse (lado esquerdo)</span><kbd>Brilho</kbd></div>
+                    <div class="shortcut-row"><span data-i18n="player.shortcuts.dragSeek">Arraste horizontal</span><kbd>Busca rápida</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.exitFullscreen">Sair da tela cheia</span><kbd>Esc</kbd></div>
                   </div>
                 </div>
@@ -516,6 +591,14 @@
                     <input type="checkbox" id="chk-auto-start" />
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                   </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4 data-i18n="dlna.friendlyName.title">Nome na rede</h4>
+                    <p data-i18n="dlna.friendlyName.hint">Como este computador aparece para outros dispositivos ao transmitir via DLNA/Cast.</p>
+                  </div>
+                  <input type="text" class="select-input text-input" id="txt-dlna-friendly-name" maxlength="40" placeholder="Ex: Aura Player" />
                 </div>
 
                 <div class="setting-card">

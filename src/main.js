@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, screen, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const MPVPlayer = require('./mpv');
@@ -7,6 +7,8 @@ const DlnaRenderer = require('./dlna-renderer');
 const WatchHistory = require('./watch-history');
 const Settings = require('./settings');
 const Library = require('./library');
+const IntroStore = require('./intro-store');
+const introDetector = require('./services/intro-detector');
 const { checkForUpdates, setMainWindow } = require('./auto-updater');
 const logger = require('./services/logger');
 const packageJson = require('../package.json');
@@ -39,10 +41,86 @@ let lastCursorPos = null;
 let cursorPollTimer = null;
 let appliedDefaultVolume = false;
 let castSupervisorTimer = null;
+let isPipMode = false;
+let normalBounds = null;
+let lastThumbarPaused = null;
+let thumbarIcons = null;
+
+function initThumbarIcons() {
+  if (thumbarIcons || process.platform !== 'win32') return;
+  const iconsDir = path.join(__dirname, '../assets/icons');
+  try {
+    thumbarIcons = {
+      back: nativeImage.createFromPath(path.join(iconsDir, 'thumbar-back.png')),
+      play: nativeImage.createFromPath(path.join(iconsDir, 'thumbar-play.png')),
+      pause: nativeImage.createFromPath(path.join(iconsDir, 'thumbar-pause.png')),
+      fwd: nativeImage.createFromPath(path.join(iconsDir, 'thumbar-fwd.png')),
+    };
+  } catch {}
+}
+
+function updateThumbarButtons(isPaused) {
+  if (!mainWindow || mainWindow.isDestroyed() || process.platform !== 'win32') return;
+  initThumbarIcons();
+  if (!thumbarIcons) return;
+  if (lastThumbarPaused === isPaused) return;
+  lastThumbarPaused = isPaused;
+  try {
+    mainWindow.setThumbarButtons([
+      {
+        tooltip: 'Voltar 10s (←)',
+        icon: thumbarIcons.back,
+        click: () => { if (player) player.seek(-10).catch(()=>{}); },
+      },
+      {
+        tooltip: isPaused ? 'Reproduzir (Espaço)' : 'Pausar (Espaço)',
+        icon: isPaused ? thumbarIcons.play : thumbarIcons.pause,
+        click: () => { if (player) (isPaused ? player.play() : player.pause()).catch(()=>{}); },
+      },
+      {
+        tooltip: 'Avançar 10s (→)',
+        icon: thumbarIcons.fwd,
+        click: () => { if (player) player.seek(10).catch(()=>{}); },
+      },
+    ]);
+  } catch {}
+}
+
+function togglePip() {
+  if (!mainWindow || mainWindow.isDestroyed()) return isPipMode;
+  if (!isPipMode) {
+    normalBounds = mainWindow.getBounds();
+    isPipMode = true;
+    const currentDisplay = screen.getDisplayMatching(normalBounds);
+    const workArea = currentDisplay.workArea;
+    const pipWidth = 420;
+    const pipHeight = 236;
+    const x = Math.round(workArea.x + workArea.width - pipWidth - 20);
+    const y = Math.round(workArea.y + workArea.height - pipHeight - 20);
+    mainWindow.setMinimumSize(320, 180);
+    mainWindow.setBounds({ x, y, width: pipWidth, height: pipHeight });
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    broadcast('pip:changed', true);
+  } else {
+    isPipMode = false;
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setMinimumSize(640, 480);
+    if (normalBounds) {
+      mainWindow.setBounds(normalBounds);
+    }
+    broadcast('pip:changed', false);
+  }
+  return isPipMode;
+}
 
 const watchHistory = new WatchHistory(path.join(app.getPath('userData'), 'watch-history.json'));
 const settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
 const library = new Library(path.join(app.getPath('userData'), 'library.json'), path.join(app.getPath('userData'), 'thumbnails'));
+const introStore = new IntroStore(path.join(app.getPath('userData'), 'intro-profiles.json'));
+
+let tempIntroStart = null;
+let tempIntroEnd = null;
+let activeIntroInterval = null;
 
 function getHwndBuffer(win) {
   // Buffer bruto do handle nativo da janela — usado tanto pro --wid do mpv
@@ -277,9 +355,17 @@ app.whenReady().then(async () => {
     screenshotDir,
     liveBufferProfile: settings.get('liveBufferProfile'),
     liveCustomTargetSecs: settings.get('liveCustomTargetSecs'),
+    videoQualityProfile: settings.get('videoQualityProfile'),
+    videoDeband: settings.get('videoDeband'),
+    audioNightMode: settings.get('audioNightMode'),
+    audioDelaySecs: settings.get('audioDelaySecs'),
+    audioPreset: settings.get('audioPreset'),
   });
   player.on('load', ({ target }) => {
     broadcast('player:now-playing', { target });
+    activeIntroInterval = null;
+    broadcast('player:intro-detected', null);
+
     // Volume padrao (Configuracoes > Reproducao) so se aplica no primeiro
     // arquivo carregado na sessao — depois disso o volume e "ao vivo",
     // ajustado pelo usuario, e nao deve ser sobrescrito a cada novo video.
@@ -288,9 +374,76 @@ app.whenReady().then(async () => {
       const vol = settings.get('defaultVolume');
       if (typeof vol === 'number') player.setVolume(vol).catch(() => {});
     }
+
+    // Detecção automática de abertura (Capítulos ou Assinatura Acústica dos 5 min)
+    setTimeout(async () => {
+      try {
+        if (!player || player.currentTarget !== target) return;
+        const chapters = await player.getProperty('chapter-list', []);
+        let chapterIntro = null;
+        if (Array.isArray(chapters) && chapters.length > 1) {
+          for (let i = 0; i < chapters.length; i++) {
+            const title = (chapters[i].title || '').toLowerCase();
+            if (title.includes('op') || title.includes('opening') || title.includes('intro') || title.includes('abertura')) {
+              const nextTime = chapters[i + 1] ? chapters[i + 1].time : (chapters[i].time + 90);
+              chapterIntro = {
+                startTime: Math.round(chapters[i].time * 10) / 10,
+                endTime: Math.round(nextTime * 10) / 10,
+                duration: Math.round((nextTime - chapters[i].time) * 10) / 10,
+              };
+              break;
+            }
+          }
+        }
+        if (chapterIntro) {
+          activeIntroInterval = chapterIntro;
+          broadcast('player:intro-detected', activeIntroInterval);
+          logger.player(`[intro] Abertura detectada por capítulos: ${chapterIntro.startTime}s - ${chapterIntro.endTime}s`);
+          return;
+        }
+
+        const recentProfiles = introStore.getRecentProfiles(5);
+        if (recentProfiles.length > 0) {
+          introDetector.scanEpisodeAgainstProfiles(target, recentProfiles).then((res) => {
+            if (res.matched && player && player.currentTarget === target) {
+              activeIntroInterval = {
+                startTime: res.startTime,
+                endTime: res.endTime,
+                duration: res.duration,
+                title: res.profile ? res.profile.title : undefined,
+              };
+              if (res.profile && res.profile.id) {
+                introStore.setActiveProfileId(res.profile.id);
+              }
+              broadcast('player:intro-detected', activeIntroInterval);
+              logger.player(`[intro] Abertura "${(res.profile && res.profile.title) || 'Salva'}" identificada por acústica: ${res.startTime}s - ${res.endTime}s (Confiança: ${(res.confidence * 100).toFixed(0)}%)`);
+            } else if (!activeIntroInterval && player && player.currentTarget === target) {
+              const topProfile = recentProfiles[0];
+              const isFixedOnly = !topProfile.signature || topProfile.signature.length === 0;
+              if (isFixedOnly && typeof topProfile.defaultStart === 'number' && topProfile.duration > 0) {
+                activeIntroInterval = {
+                  startTime: topProfile.defaultStart,
+                  endTime: Math.round((topProfile.defaultStart + topProfile.duration) * 10) / 10,
+                  duration: topProfile.duration,
+                  title: topProfile.title,
+                };
+                broadcast('player:intro-detected', activeIntroInterval);
+                logger.player(`[intro] Abertura de intervalo fixo aplicada: ${activeIntroInterval.startTime}s - ${activeIntroInterval.endTime}s`);
+              } else {
+                logger.player('[intro] Nenhuma correspondência acústica encontrada nos primeiros 8 minutos.');
+                broadcast('player:intro-diff-detected', { recentTitle: topProfile.title });
+              }
+            }
+          }).catch((err) => {
+            logger.player(`[intro] Erro durante a varredura acústica: ${err.message}`);
+          });
+        }
+      } catch {}
+    }, 2000);
   });
   player.on('status', (info) => {
     broadcast('player:status', info);
+    updateThumbarButtons(!!info.paused);
   });
   player.on('tracks', (info) => {
     broadcast('player:tracks', info);
@@ -298,7 +451,9 @@ app.whenReady().then(async () => {
   player.on('live-event', (info) => {
     broadcast('player:live-event', info);
   });
-  renderer = new DlnaRenderer(player);
+  renderer = new DlnaRenderer(player, {
+    friendlyName: settings.get('dlnaFriendlyName') || undefined,
+  });
   renderer.on('activity', (info) => {
     broadcast('cast:activity', info);
   });
@@ -443,6 +598,46 @@ ipcMain.handle('player:set-subtitle-track', (_evt, id) => player.setSubtitleTrac
 ipcMain.handle('player:set-speed', (_evt, value) => player.setSpeed(value));
 ipcMain.handle('player:get-media-info', () => player.getMediaInfo());
 
+ipcMain.handle('player:toggle-pip', () => togglePip());
+ipcMain.handle('player:get-pip', () => isPipMode);
+
+ipcMain.handle('player:set-brightness', async (_evt, val) => {
+  if (!player) return 0;
+  return player.setBrightness(val);
+});
+ipcMain.handle('player:get-brightness', () => (player ? player.brightness : 0));
+
+ipcMain.handle('player:set-contrast', async (_evt, val) => {
+  if (!player) return 0;
+  return player.setContrast(val);
+});
+ipcMain.handle('player:get-contrast', () => (player ? player.contrast : 0));
+
+ipcMain.handle('player:set-night-mode', async (_evt, enabled) => {
+  settings.set('audioNightMode', !!enabled);
+  if (player) await player.setNightMode(!!enabled);
+  broadcast('player:night-mode-changed', !!enabled);
+  return !!enabled;
+});
+ipcMain.handle('player:get-night-mode', () => (player ? player.audioNightMode : settings.get('audioNightMode')));
+
+ipcMain.handle('player:set-audio-delay', async (_evt, secs) => {
+  const num = Number(secs) || 0;
+  settings.set('audioDelaySecs', num);
+  if (player) await player.setAudioDelay(num);
+  broadcast('player:audio-delay-changed', num);
+  return num;
+});
+ipcMain.handle('player:get-audio-delay', () => (player ? player.audioDelaySecs : settings.get('audioDelaySecs')));
+
+ipcMain.handle('player:set-audio-preset', async (_evt, presetId) => {
+  settings.set('audioPreset', presetId);
+  if (player) await player.setAudioPreset(presetId);
+  broadcast('player:audio-preset-changed', presetId);
+  return presetId;
+});
+ipcMain.handle('player:get-audio-preset', () => (player ? player.audioPreset : settings.get('audioPreset')));
+
 ipcMain.handle('window:toggle-always-on-top', () => {
   const next = !mainWindow.isAlwaysOnTop();
   mainWindow.setAlwaysOnTop(next);
@@ -474,6 +669,17 @@ ipcMain.handle('settings:set-discovery-timeout', (_evt, ms) => {
   settings.set('dlnaDiscoveryTimeout', Number(ms) || 4000);
   return settings.getAll();
 });
+ipcMain.handle('settings:set-dlna-friendly-name', async (_evt, name) => {
+  const cleanName = typeof name === 'string' ? name.trim() : '';
+  settings.set('dlnaFriendlyName', cleanName);
+  renderer.setFriendlyName(cleanName);
+  if (renderer.getStatus().active) {
+    await renderer.stop();
+    await renderer.start(settings.get('preferredInterface'));
+  }
+  broadcast('cast:status-changed', renderer.getStatus());
+  return settings.getAll();
+});
 ipcMain.handle('settings:set-default-volume', (_evt, vol) => {
   settings.set('defaultVolume', Number(vol));
   return settings.getAll();
@@ -484,6 +690,19 @@ ipcMain.handle('settings:set-auto-play-next', (_evt, value) => {
 });
 ipcMain.handle('settings:set-auto-reconnect-cast', (_evt, value) => {
   settings.set('autoReconnectCast', !!value);
+  return settings.getAll();
+});
+
+const VIDEO_QUALITY_PROFILE_IDS = ['high', 'ultra', 'performance'];
+ipcMain.handle('settings:set-video-quality-profile', async (_evt, profile) => {
+  const value = VIDEO_QUALITY_PROFILE_IDS.includes(profile) ? profile : 'high';
+  settings.set('videoQualityProfile', value);
+  await player.setVideoQualityProfile(value);
+  return settings.getAll();
+});
+ipcMain.handle('settings:set-video-deband', async (_evt, enabled) => {
+  settings.set('videoDeband', !!enabled);
+  await player.setVideoDeband(!!enabled);
   return settings.getAll();
 });
 
@@ -578,6 +797,87 @@ ipcMain.handle('settings:set-check-updates', (_evt, value) => {
   return settings.getAll();
 });
 ipcMain.handle('app:get-version-info', () => buildInfo);
+
+// --- Sistema de Pular e Marcar Abertura (Intro Detection & Profiles) ---
+ipcMain.handle('intro:mark-start', async () => {
+  if (!player) return null;
+  const pos = await player.getProperty('time-pos', 0);
+  tempIntroStart = Math.max(0, Math.round(pos * 10) / 10);
+  broadcast('intro:mark-state', { start: tempIntroStart, end: tempIntroEnd });
+  return tempIntroStart;
+});
+
+ipcMain.handle('intro:mark-end', async () => {
+  if (!player) return null;
+  const pos = await player.getProperty('time-pos', 0);
+  tempIntroEnd = Math.max(0, Math.round(pos * 10) / 10);
+  broadcast('intro:mark-state', { start: tempIntroStart, end: tempIntroEnd });
+  return tempIntroEnd;
+});
+
+ipcMain.handle('intro:get-mark-state', () => {
+  return { start: tempIntroStart, end: tempIntroEnd };
+});
+
+ipcMain.handle('intro:save-profile', async (_evt, customTitle) => {
+  if (!player || !player.currentTarget) throw new Error('Nenhum vídeo em reprodução.');
+  if (tempIntroStart === null || tempIntroEnd === null || tempIntroEnd <= tempIntroStart) {
+    throw new Error('Marque o início e o fim da abertura antes de salvar.');
+  }
+  const duration = Math.round((tempIntroEnd - tempIntroStart) * 10) / 10;
+  let sigData = { duration, signature: [], sampleRate: 20, acousticLearned: false };
+  try {
+    sigData = await introDetector.generateIntroSignature(player.currentTarget, tempIntroStart, tempIntroEnd);
+  } catch (err) {
+    logger.player(`[intro] Extração acústica não disponível no stream atual: ${err.message}`);
+  }
+
+  const profile = introStore.saveProfile({
+    title: customTitle || `Abertura (${Math.round(duration)}s)`,
+    duration: duration,
+    defaultStart: tempIntroStart,
+    signature: sigData.signature || [],
+    sampleRate: sigData.sampleRate || 20,
+  });
+
+  activeIntroInterval = { startTime: tempIntroStart, endTime: tempIntroEnd, duration: duration };
+  broadcast('player:intro-detected', activeIntroInterval);
+  tempIntroStart = null;
+  tempIntroEnd = null;
+  broadcast('intro:mark-state', { start: null, end: null });
+  return { ...profile, acousticLearned: sigData.acousticLearned };
+});
+
+ipcMain.handle('intro:get-detected', () => activeIntroInterval);
+ipcMain.handle('intro:get-profiles', () => introStore.listProfiles());
+
+ipcMain.handle('intro:set-active-profile', async (_evt, id) => {
+  const ok = introStore.setActiveProfileId(id);
+  if (ok && player && player.currentTarget) {
+    const profile = introStore.getProfile(id);
+    introDetector.scanEpisodeForIntro(player.currentTarget, profile).then((res) => {
+      if (res.matched) {
+        activeIntroInterval = { startTime: res.startTime, endTime: res.endTime, duration: res.duration };
+        broadcast('player:intro-detected', activeIntroInterval);
+      }
+    }).catch(() => {});
+  }
+  return ok;
+});
+
+ipcMain.handle('intro:delete-profile', (_evt, id) => {
+  return introStore.deleteProfile(id);
+});
+
+ipcMain.handle('settings:get-auto-skip-intro', () => {
+  return !!settings.get('autoSkipIntro');
+});
+
+ipcMain.handle('settings:set-auto-skip-intro', (_evt, value) => {
+  settings.set('autoSkipIntro', !!value);
+  broadcast('settings:auto-skip-intro-changed', !!value);
+  return settings.getAll();
+});
 
 ipcMain.on('player:set-video-rect', (_evt, rect) => {
   lastVideoRect = rect;
