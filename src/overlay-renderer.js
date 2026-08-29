@@ -717,8 +717,11 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'Escape') {
-    if (modalOpen) { closeModal(); return; }
-    if (openDropdownId) { closeDropdowns(); return; }
+    if (modalOpen) closeModal();
+    else if (openDropdownId) closeDropdowns();
+    return;
+  }
+  if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.altKey && !e.metaKey) {
     if (!btnSkipIntro.hidden && autoSkipIntro && !autoSkipCancelledForCurrentMedia && (position || 0) < (detectedIntro?.startTime || 0)) {
       autoSkipCancelledForCurrentMedia = true;
       if (ovSkipRing) ovSkipRing.hidden = true;
@@ -728,7 +731,6 @@ document.addEventListener('keydown', (e) => {
       showToast('⚡ Auto-skip cancelado (Abertura mantida)');
       return;
     }
-    return;
   }
   if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.altKey && !e.metaKey) {
     window.api.togglePip().catch(() => {});

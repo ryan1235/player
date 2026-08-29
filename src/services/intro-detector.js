@@ -148,8 +148,8 @@ function crossCorrelate(refSignature, epAudioEnvelope, targetHz = SAMPLE_RATE_HZ
   const endTime = Math.max(startTime + 1, snappedEndBin / targetHz);
   const duration = endTime - startTime;
 
-  // Detecção robusta com limiar adaptativo
-  const matched = (bestScore >= 0.42) || (bestScore >= 0.32 && prominence >= 1.8);
+  // Detecção robusta com limiar estrito anti-falso-positivo
+  const matched = (bestScore >= 0.65) || (bestScore >= 0.58 && prominence >= 2.5);
 
   return {
     matched,
