@@ -7,9 +7,10 @@ const DlnaRenderer = require('./dlna-renderer');
 const WatchHistory = require('./watch-history');
 const Settings = require('./settings');
 const Library = require('./library');
-const IntroStore = require('./intro-store');
-const introDetector = require('./services/intro-detector');
 const { checkForUpdates, setMainWindow } = require('./auto-updater');
+const { SubtitleService, isGarbageTitle } = require('./services/subtitle-service');
+const { SkipDbService } = require('./services/skipdb-service');
+const { PosterService } = require('./services/poster-service');
 const logger = require('./services/logger');
 const packageJson = require('../package.json');
 let buildInfo;
@@ -36,12 +37,15 @@ let mainWindow;
 let controlsOverlay;
 let player;
 let renderer;
+let subtitleService;
+let skipDbService;
 let lastVideoRect = null;
 let lastCursorPos = null;
 let cursorPollTimer = null;
 let appliedDefaultVolume = false;
 let castSupervisorTimer = null;
 let isPipMode = false;
+let userAlwaysOnTop = false;
 let normalBounds = null;
 let lastThumbarPaused = null;
 let thumbarIcons = null;
@@ -100,10 +104,16 @@ function togglePip() {
     mainWindow.setMinimumSize(320, 180);
     mainWindow.setBounds({ x, y, width: pipWidth, height: pipHeight });
     mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(true, 'screen-saver');
+    }
     broadcast('pip:changed', true);
   } else {
     isPipMode = false;
-    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setAlwaysOnTop(userAlwaysOnTop);
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(userAlwaysOnTop);
+    }
     mainWindow.setMinimumSize(640, 480);
     if (normalBounds) {
       mainWindow.setBounds(normalBounds);
@@ -116,11 +126,56 @@ function togglePip() {
 const watchHistory = new WatchHistory(path.join(app.getPath('userData'), 'watch-history.json'));
 const settings = new Settings(path.join(app.getPath('userData'), 'settings.json'));
 const library = new Library(path.join(app.getPath('userData'), 'library.json'), path.join(app.getPath('userData'), 'thumbnails'));
-const introStore = new IntroStore(path.join(app.getPath('userData'), 'intro-profiles.json'));
+const posterService = new PosterService(path.join(app.getPath('userData'), 'posters'));
 
-let tempIntroStart = null;
-let tempIntroEnd = null;
-let activeIntroInterval = null;
+async function updateHistoryWithSeries(target, seriesInfo) {
+  if (!target || !seriesInfo || !seriesInfo.title) return;
+  const sTitle = String(seriesInfo.title).trim();
+  if (isGarbageTitle(sTitle)) return;
+  const season = Math.max(1, parseInt(seriesInfo.season, 10) || 1);
+  const episode = Math.max(1, parseInt(seriesInfo.currentEpisode || seriesInfo.episode, 10) || 1);
+  const displayTitle = `${sTitle} — T${season} Ep ${episode}`;
+
+  let imdbId = seriesInfo.imdbId || null;
+  let poster = seriesInfo.poster || null;
+
+  try {
+    const p = await posterService.resolveAndDownload(sTitle, imdbId);
+    if (p) {
+      if (p.imdbId && !imdbId) imdbId = p.imdbId;
+      const local = posterService.getLocalPath(imdbId);
+      if (local) {
+        poster = 'file:///' + local.replace(/\\/g, '/');
+      } else {
+        poster = p.posterUrl || p.remoteUrl || poster;
+      }
+    }
+  } catch (err) {
+    logger.network('[history] erro ao resolver poster:', err.message);
+  }
+
+  if (!poster && imdbId) {
+    poster = `https://images.metahub.space/poster/medium/${imdbId}/img`;
+  }
+
+  watchHistory.set(target, {
+    title: displayTitle,
+    seriesTitle: sTitle,
+    season,
+    episode,
+    imdbId: imdbId || null,
+    poster: poster || null,
+  });
+
+  broadcast('player:now-playing', {
+    target,
+    title: displayTitle,
+    seriesTitle: sTitle,
+    season,
+    episode,
+    poster,
+  });
+}
 
 function getHwndBuffer(win) {
   // Buffer bruto do handle nativo da janela — usado tanto pro --wid do mpv
@@ -196,6 +251,7 @@ function createWindows() {
     minHeight: 520,
     backgroundColor: '#0f1115',
     autoHideMenuBar: true,
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -203,6 +259,10 @@ function createWindows() {
     },
   });
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
   // Janela transparente sobreposta a area de video, so com os controles (HTML).
   // Fica sempre totalmente interativa (nao alterna ignoreMouseEvents em tempo
@@ -216,9 +276,9 @@ function createWindows() {
     frame: false,
     show: false,
     skipTaskbar: true,
-    type: 'toolbar',
     resizable: false,
-    focusable: false,
+    focusable: true,
+    thickFrame: false,
     transparent: true,
     hasShadow: false,
     backgroundColor: '#00000000',
@@ -310,7 +370,9 @@ function updateEmbeddedVideoBounds() {
 function startCursorActivityPoll() {
   if (cursorPollTimer) return;
   cursorPollTimer = setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isFocused()) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const isFocused = mainWindow.isFocused() || (controlsOverlay && !controlsOverlay.isDestroyed() && controlsOverlay.isFocused());
+    if (!isFocused) return;
     const pos = screen.getCursorScreenPoint();
     if (!lastCursorPos || pos.x !== lastCursorPos.x || pos.y !== lastCursorPos.y) {
       lastCursorPos = pos;
@@ -329,6 +391,7 @@ function broadcast(channel, payload) {
 app.on('second-instance', () => {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
   mainWindow.focus();
 });
 
@@ -361,10 +424,18 @@ app.whenReady().then(async () => {
     audioDelaySecs: settings.get('audioDelaySecs'),
     audioPreset: settings.get('audioPreset'),
   });
+
+  const subtitleCacheDir = path.join(app.getPath('userData'), 'subtitles');
+  subtitleService = new SubtitleService(settings, subtitleCacheDir, player);
+  skipDbService = new SkipDbService(settings);
+
   player.on('load', ({ target }) => {
-    broadcast('player:now-playing', { target });
-    activeIntroInterval = null;
-    broadcast('player:intro-detected', null);
+    let initialTitle = null;
+    if (subtitleService && subtitleService.activeSeries) {
+      const s = subtitleService.activeSeries;
+      initialTitle = `${s.title} — T${s.season || 1} Ep ${s.currentEpisode || 1}`;
+    }
+    broadcast('player:now-playing', { target, title: initialTitle });
 
     // Volume padrao (Configuracoes > Reproducao) so se aplica no primeiro
     // arquivo carregado na sessao — depois disso o volume e "ao vivo",
@@ -375,71 +446,66 @@ app.whenReady().then(async () => {
       if (typeof vol === 'number') player.setVolume(vol).catch(() => {});
     }
 
-    // Detecção automática de abertura (Capítulos ou Assinatura Acústica dos 5 min)
-    setTimeout(async () => {
-      try {
-        if (!player || player.currentTarget !== target) return;
-        const chapters = await player.getProperty('chapter-list', []);
-        let chapterIntro = null;
-        if (Array.isArray(chapters) && chapters.length > 1) {
-          for (let i = 0; i < chapters.length; i++) {
-            const title = (chapters[i].title || '').toLowerCase();
-            if (title.includes('op') || title.includes('opening') || title.includes('intro') || title.includes('abertura')) {
-              const nextTime = chapters[i + 1] ? chapters[i + 1].time : (chapters[i].time + 90);
-              chapterIntro = {
-                startTime: Math.round(chapters[i].time * 10) / 10,
-                endTime: Math.round(nextTime * 10) / 10,
-                duration: Math.round((nextTime - chapters[i].time) * 10) / 10,
-              };
-              break;
-            }
+    if (subtitleService) {
+      subtitleService.handleMediaLoad(target).then((subResult) => {
+        if (subResult) {
+          if (subtitleService.activeSeries) {
+            updateHistoryWithSeries(target, subtitleService.activeSeries).catch(() => {});
+          }
+          if (subResult.status === 'applied') {
+            broadcast('subtitles:auto-applied', {
+              series: subResult.series,
+              cached: subResult.cached,
+              provider: subResult.provider,
+            });
+          } else if (subResult.status === 'prompt') {
+            broadcast('subtitles:next-episode-prompt', {
+              series: subResult.series,
+            });
+          }
+
+          if (subResult.advanced) {
+            broadcast('dlna:episode-advanced', {
+              series: subResult.series,
+              appliedSubtitle: subResult.status === 'applied',
+              cached: subResult.cached,
+              provider: subResult.provider,
+            });
           }
         }
-        if (chapterIntro) {
-          activeIntroInterval = chapterIntro;
-          broadcast('player:intro-detected', activeIntroInterval);
-          logger.player(`[intro] Abertura detectada por capítulos: ${chapterIntro.startTime}s - ${chapterIntro.endTime}s`);
-          return;
+
+        // Se há série ativa, busca os segmentos de abertura do SkipDB
+        if (subtitleService.activeSeries && skipDbService) {
+          const s = subtitleService.activeSeries;
+          skipDbService.getSegments({
+            imdbId: s.imdbId,
+            title: s.title,
+            season: s.season,
+            episode: s.currentEpisode,
+          }).then((segments) => {
+            if (segments) broadcast('player:skip-segments', segments);
+          }).catch(() => {});
+        } else {
+          // Se não há série ativa e o vídeo parece ser streaming DLNA / YouCine,
+          // sugere identificação rápida caso haja séries no histórico recente!
+          const rawName = path.basename(target || '');
+          const isHashOrStream = isGarbageTitle(rawName) || /^https?:\/\//i.test(target);
+          const recents = subtitleService.getRecentSeries();
+          if (recents && recents.length > 0 && isHashOrStream) {
+            const promptList = recents.map((s) => ({
+              title: s.title,
+              season: s.season,
+              currentEpisode: s.episode,
+              suggestedEpisode: s.episode + 1,
+              imdbId: s.imdbId || null,
+            }));
+            broadcast('dlna:identify-prompt', { recentSeries: promptList });
+          }
         }
 
-        const recentProfiles = introStore.getRecentProfiles(5);
-        if (recentProfiles.length > 0) {
-          introDetector.scanEpisodeAgainstProfiles(target, recentProfiles).then((res) => {
-            if (res.matched && player && player.currentTarget === target) {
-              activeIntroInterval = {
-                startTime: res.startTime,
-                endTime: res.endTime,
-                duration: res.duration,
-                title: res.profile ? res.profile.title : undefined,
-              };
-              if (res.profile && res.profile.id) {
-                introStore.setActiveProfileId(res.profile.id);
-              }
-              broadcast('player:intro-detected', activeIntroInterval);
-              logger.player(`[intro] Abertura "${(res.profile && res.profile.title) || 'Salva'}" identificada por acústica: ${res.startTime}s - ${res.endTime}s (Confiança: ${(res.confidence * 100).toFixed(0)}%)`);
-            } else if (!activeIntroInterval && player && player.currentTarget === target) {
-              const topProfile = recentProfiles[0];
-              const isFixedOnly = !topProfile.signature || topProfile.signature.length === 0;
-              if (isFixedOnly && typeof topProfile.defaultStart === 'number' && topProfile.duration > 0) {
-                activeIntroInterval = {
-                  startTime: topProfile.defaultStart,
-                  endTime: Math.round((topProfile.defaultStart + topProfile.duration) * 10) / 10,
-                  duration: topProfile.duration,
-                  title: topProfile.title,
-                };
-                broadcast('player:intro-detected', activeIntroInterval);
-                logger.player(`[intro] Abertura de intervalo fixo aplicada: ${activeIntroInterval.startTime}s - ${activeIntroInterval.endTime}s`);
-              } else {
-                logger.player('[intro] Nenhuma correspondência acústica encontrada nos primeiros 8 minutos.');
-                broadcast('player:intro-diff-detected', { recentTitle: topProfile.title });
-              }
-            }
-          }).catch((err) => {
-            logger.player(`[intro] Erro durante a varredura acústica: ${err.message}`);
-          });
-        }
-      } catch {}
-    }, 2000);
+        broadcast('subtitles:state-changed', subtitleService.getState());
+      }).catch((err) => logger.network('[subtitle-service] erro ao processar load:', err.message));
+    }
   });
   player.on('status', (info) => {
     broadcast('player:status', info);
@@ -465,8 +531,73 @@ app.whenReady().then(async () => {
     broadcast('cast:status-changed', renderer.getStatus());
   });
 
-  mainWindow.on('enter-full-screen', () => broadcast('player:fullscreen-changed', true));
-  mainWindow.on('leave-full-screen', () => broadcast('player:fullscreen-changed', false));
+  // --- Aura Sync: Android informa série em reprodução → busca SkipDB ---
+  // Guarda o último contexto recebido para usar quando a duração ficar disponível.
+  let _auraSyncPendingContext = null;
+  let _auraSyncSegmentsFetched = false; // evita re-busca para o mesmo ep
+
+  async function fetchSkipSegmentsFromSync(ctx, duration) {
+    if (!ctx || !skipDbService) return;
+    try {
+      const segments = await skipDbService.getSegments({
+        imdbId: ctx.imdbId || null,
+        title: ctx.title,
+        season: ctx.season,
+        episode: ctx.episode,
+        duration: duration > 0 ? duration : null,
+      });
+      if (segments) {
+        logger.network(`[aura-sync] segmentos SkipDB para ${ctx.title} S${ctx.season}E${ctx.episode}: intro=${!!segments.intro} outro=${!!segments.outro}`);
+        broadcast('player:skip-segments', segments);
+        _auraSyncSegmentsFetched = true;
+      }
+    } catch (err) {
+      logger.network('[aura-sync] erro ao buscar SkipDB:', err.message);
+    }
+  }
+
+  renderer.on('sync:now-playing', async (ctx) => {
+    _auraSyncPendingContext = ctx;
+    _auraSyncSegmentsFetched = false;
+
+    // Tenta pegar a duração atual do MPV (pode já estar disponível se DLNA já carregou)
+    let duration = 0;
+    if (player) {
+      try { duration = await player.getProperty('duration', 0); } catch {}
+    }
+    await fetchSkipSegmentsFromSync(ctx, duration);
+  });
+
+  // Quando o player reporta status, aproveitar a duration para re-buscar SkipDB
+  // com o parâmetro correto (só na primeira vez após receber sync:now-playing)
+  player.on('status', async (info) => {
+    if (
+      _auraSyncPendingContext &&
+      !_auraSyncSegmentsFetched &&
+      info.duration > 0 &&
+      !info.isLive
+    ) {
+      await fetchSkipSegmentsFromSync(_auraSyncPendingContext, info.duration);
+    }
+  });
+
+
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(true, 'screen-saver');
+      controlsOverlay.moveTop();
+    }
+    broadcast('player:fullscreen-changed', true);
+  });
+  mainWindow.on('leave-full-screen', () => {
+    const userAot = isPipMode || userAlwaysOnTop;
+    mainWindow.setAlwaysOnTop(userAot, isPipMode ? 'screen-saver' : 'normal');
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(userAot, isPipMode ? 'screen-saver' : 'normal');
+    }
+    broadcast('player:fullscreen-changed', false);
+  });
 
   if (settings.get('autoStartRenderer')) {
     try {
@@ -573,6 +704,166 @@ ipcMain.handle('player:seek-absolute', (_evt, secs) => player.seekAbsolute(secs)
 ipcMain.handle('player:toggle-mute', () => player.toggleMute());
 ipcMain.handle('player:toggle-subtitles', () => player.toggleSubtitles());
 ipcMain.handle('player:cycle-subtitle-track', () => player.cycleSubtitleTrack());
+ipcMain.handle('player:add-subtitle-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [{ name: 'Legendas', extensions: ['srt', 'vtt', 'ass', 'ssa', 'sub'] }],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  const filePath = result.filePaths[0];
+  if (player) {
+    await player.command(['sub-add', filePath, 'select']).catch(() => {});
+    await player._extractTracks().catch(() => {});
+  }
+  return filePath;
+});
+
+ipcMain.handle('subtitles:search-catalog', async (_evt, query) => {
+  if (!subtitleService) return [];
+  return subtitleService.searchCatalog(query);
+});
+ipcMain.handle('subtitles:catalog-details', async (_evt, params) => {
+  if (!subtitleService) return null;
+  const { id, type } = params || {};
+  return subtitleService.getCatalogDetails(id, type);
+});
+ipcMain.handle('subtitles:search', async (_evt, params) => {
+  if (!subtitleService) return [];
+  return subtitleService.searchSubtitles(params || {});
+});
+ipcMain.handle('subtitles:download-and-apply', async (_evt, params) => {
+  if (!subtitleService) throw new Error('Serviço de legendas não inicializado');
+  const savedPath = await subtitleService.downloadAndSave(params);
+  if (player) {
+    await player.command(['sub-add', savedPath, 'select']).catch(() => {});
+    await player._extractTracks().catch(() => {});
+  }
+  broadcast('subtitles:state-changed', subtitleService.getState());
+  return { path: savedPath };
+});
+ipcMain.handle('subtitles:bind-series', (_evt, { title, season, episode, imdbId }) => {
+  if (!subtitleService) return null;
+  const bound = subtitleService.bindSeries(title, season, episode, imdbId);
+  broadcast('subtitles:state-changed', subtitleService.getState());
+
+  if (bound && player && player.currentTarget) {
+    updateHistoryWithSeries(player.currentTarget, bound).catch(() => {});
+  }
+
+  if (skipDbService) {
+    skipDbService.getSegments({
+      imdbId,
+      title,
+      season,
+      episode,
+    }).then((segments) => {
+      if (segments) broadcast('player:skip-segments', segments);
+    }).catch(() => {});
+  }
+
+  return bound;
+});
+ipcMain.handle('subtitles:bind-and-apply', async (_evt, { title, season, episode, imdbId }) => {
+  if (!subtitleService) return null;
+  const bound = subtitleService.bindSeries(title, season, episode, imdbId);
+  broadcast('subtitles:state-changed', subtitleService.getState());
+
+  if (bound && player && player.currentTarget) {
+    updateHistoryWithSeries(player.currentTarget, bound).catch(() => {});
+  }
+
+  if (skipDbService) {
+    skipDbService.getSegments({
+      imdbId,
+      title,
+      season,
+      episode,
+    }).then((segments) => {
+      if (segments) broadcast('player:skip-segments', segments);
+    }).catch(() => {});
+  }
+
+  let subResult = null;
+  try {
+    const fetched = await subtitleService.autoFetchForEpisode(title, season, episode, imdbId);
+    if (fetched && fetched.path && player) {
+      await player.command(['sub-add', fetched.path, 'select']).catch(() => {});
+      await player._extractTracks().catch(() => {});
+      subResult = {
+        applied: true,
+        cached: fetched.cached,
+        provider: fetched.provider,
+        path: fetched.path,
+      };
+      broadcast('subtitles:auto-applied', {
+        series: bound,
+        cached: fetched.cached,
+        provider: fetched.provider,
+      });
+    }
+  } catch (err) {
+    logger.network('[subtitle-service] erro ao aplicar em bind-and-apply:', err.message);
+  }
+
+  return { bound, subResult };
+});
+ipcMain.handle('skip:get-segments', (_evt, params) => {
+  if (!skipDbService) return null;
+  return skipDbService.getSegments(params);
+});
+ipcMain.handle('subtitles:unbind-series', () => {
+  if (subtitleService) subtitleService.unbindSeries();
+  if (subtitleService) broadcast('subtitles:state-changed', subtitleService.getState());
+  return true;
+});
+ipcMain.handle('subtitles:not-this-series', async () => {
+  if (subtitleService) subtitleService.unbindSeries();
+  if (player) {
+    await player.setProperty('sid', 'no').catch(() => {});
+    await player.command(['sub-remove']).catch(() => {});
+    await player._extractTracks().catch(() => {});
+    if (player.currentTarget) {
+      const rawName = path.basename(player.currentTarget || '');
+      const genericTitle = isGarbageTitle(rawName) || /^https?:\/\//i.test(player.currentTarget)
+        ? 'Transmissão YouCine (DLNA)'
+        : rawName;
+
+      watchHistory.removeSeriesMetadata(player.currentTarget, genericTitle);
+
+      broadcast('player:now-playing', {
+        target: player.currentTarget,
+        title: genericTitle,
+        poster: null,
+      });
+    }
+  }
+  broadcast('player:skip-segments', null);
+  if (subtitleService) broadcast('subtitles:state-changed', subtitleService.getState());
+  return true;
+});
+ipcMain.handle('subtitles:get-state', () => {
+  return subtitleService ? subtitleService.getState() : null;
+});
+ipcMain.handle('subtitles:clear-cache', () => {
+  return subtitleService ? subtitleService.clearCache() : false;
+});
+ipcMain.handle('subtitles:save-config', (_evt, config) => {
+  if (!config) return null;
+  if (config.subdlApiKey !== undefined) settings.set('subdlApiKey', String(config.subdlApiKey).trim());
+  if (config.openSubtitlesApiKey !== undefined) settings.set('openSubtitlesApiKey', String(config.openSubtitlesApiKey).trim());
+  if (config.subtitlesLanguage !== undefined) settings.set('subtitlesLanguage', config.subtitlesLanguage);
+  if (config.subtitlesAutoDownloadNext !== undefined) settings.set('subtitlesAutoDownloadNext', !!config.subtitlesAutoDownloadNext);
+  if (config.subtitlesMode !== undefined) settings.set('subtitlesMode', String(config.subtitlesMode));
+  if (config.skipIntroAuto !== undefined) settings.set('skipIntroAuto', !!config.skipIntroAuto);
+  if (config.skipIntroEnabled !== undefined) settings.set('skipIntroEnabled', !!config.skipIntroEnabled);
+  broadcast('settings:skip-intro-changed', {
+    skipIntroAuto: settings.get('skipIntroAuto'),
+    skipIntroEnabled: settings.get('skipIntroEnabled'),
+  });
+  if (subtitleService) broadcast('subtitles:state-changed', subtitleService.getState());
+  return subtitleService ? subtitleService.getState() : null;
+});
+
 ipcMain.handle('player:cycle-audio-track', () => player.cycleAudioTrack());
 ipcMain.handle('player:screenshot', () => player.screenshot());
 ipcMain.handle('player:set-video-track', (_evt, id) => player.setVideoTrack(id));
@@ -589,7 +880,21 @@ ipcMain.handle('player:set-fit-mode', async (_evt, id) => {
 });
 ipcMain.handle('player:toggle-fullscreen', () => {
   const next = !mainWindow.isFullScreen();
-  mainWindow.setFullScreen(next);
+  if (next) {
+    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(true, 'screen-saver');
+      controlsOverlay.moveTop();
+    }
+    mainWindow.setFullScreen(true);
+  } else {
+    mainWindow.setFullScreen(false);
+    const userAot = isPipMode || userAlwaysOnTop;
+    mainWindow.setAlwaysOnTop(userAot, isPipMode ? 'screen-saver' : 'normal');
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(userAot, isPipMode ? 'screen-saver' : 'normal');
+    }
+  }
   return next;
 });
 
@@ -639,11 +944,32 @@ ipcMain.handle('player:set-audio-preset', async (_evt, presetId) => {
 ipcMain.handle('player:get-audio-preset', () => (player ? player.audioPreset : settings.get('audioPreset')));
 
 ipcMain.handle('window:toggle-always-on-top', () => {
-  const next = !mainWindow.isAlwaysOnTop();
-  mainWindow.setAlwaysOnTop(next);
-  return next;
+  userAlwaysOnTop = !userAlwaysOnTop;
+  if (!mainWindow.isFullScreen() && !isPipMode) {
+    mainWindow.setAlwaysOnTop(userAlwaysOnTop);
+    if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+      controlsOverlay.setAlwaysOnTop(userAlwaysOnTop);
+    }
+  }
+  return userAlwaysOnTop;
 });
-ipcMain.handle('window:get-always-on-top', () => mainWindow.isAlwaysOnTop());
+ipcMain.handle('window:get-always-on-top', () => userAlwaysOnTop);
+
+ipcMain.handle('overlay:focus', () => {
+  if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+    controlsOverlay.focus();
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle('main-window:focus', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.focus();
+    return true;
+  }
+  return false;
+});
 
 ipcMain.handle('dlna:discover', () => dlna.discoverServers(settings.get('dlnaDiscoveryTimeout')));
 ipcMain.handle('dlna:browse', (_evt, server, objectId) => dlna.browse(server, objectId));
@@ -751,6 +1077,24 @@ ipcMain.handle('settings:set-launch-on-boot', (_evt, value) => {
 ipcMain.handle('history:list', () => {
   const entries = Object.entries(watchHistory.getAll()).map(([target, entry]) => ({ target, ...entry }));
   entries.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  for (const entry of entries) {
+    if (entry.imdbId) {
+      const local = posterService.getLocalPath(entry.imdbId);
+      if (local) {
+        entry.poster = 'file:///' + local.replace(/\\/g, '/');
+      } else if (!entry.poster) {
+        entry.poster = `https://images.metahub.space/poster/medium/${entry.imdbId}/img`;
+      }
+    } else if (entry.seriesTitle && !entry.poster) {
+      posterService.resolveAndDownload(entry.seriesTitle).then((p) => {
+        if (p && (p.imdbId || p.posterUrl)) {
+          watchHistory.set(entry.target, { imdbId: p.imdbId, poster: p.posterUrl });
+        }
+      }).catch(() => {});
+    }
+  }
+
   return entries;
 });
 ipcMain.handle('history:remove', (_evt, target) => {
@@ -797,87 +1141,6 @@ ipcMain.handle('settings:set-check-updates', (_evt, value) => {
   return settings.getAll();
 });
 ipcMain.handle('app:get-version-info', () => buildInfo);
-
-// --- Sistema de Pular e Marcar Abertura (Intro Detection & Profiles) ---
-ipcMain.handle('intro:mark-start', async () => {
-  if (!player) return null;
-  const pos = await player.getProperty('time-pos', 0);
-  tempIntroStart = Math.max(0, Math.round(pos * 10) / 10);
-  broadcast('intro:mark-state', { start: tempIntroStart, end: tempIntroEnd });
-  return tempIntroStart;
-});
-
-ipcMain.handle('intro:mark-end', async () => {
-  if (!player) return null;
-  const pos = await player.getProperty('time-pos', 0);
-  tempIntroEnd = Math.max(0, Math.round(pos * 10) / 10);
-  broadcast('intro:mark-state', { start: tempIntroStart, end: tempIntroEnd });
-  return tempIntroEnd;
-});
-
-ipcMain.handle('intro:get-mark-state', () => {
-  return { start: tempIntroStart, end: tempIntroEnd };
-});
-
-ipcMain.handle('intro:save-profile', async (_evt, customTitle) => {
-  if (!player || !player.currentTarget) throw new Error('Nenhum vídeo em reprodução.');
-  if (tempIntroStart === null || tempIntroEnd === null || tempIntroEnd <= tempIntroStart) {
-    throw new Error('Marque o início e o fim da abertura antes de salvar.');
-  }
-  const duration = Math.round((tempIntroEnd - tempIntroStart) * 10) / 10;
-  let sigData = { duration, signature: [], sampleRate: 20, acousticLearned: false };
-  try {
-    sigData = await introDetector.generateIntroSignature(player.currentTarget, tempIntroStart, tempIntroEnd);
-  } catch (err) {
-    logger.player(`[intro] Extração acústica não disponível no stream atual: ${err.message}`);
-  }
-
-  const profile = introStore.saveProfile({
-    title: customTitle || `Abertura (${Math.round(duration)}s)`,
-    duration: duration,
-    defaultStart: tempIntroStart,
-    signature: sigData.signature || [],
-    sampleRate: sigData.sampleRate || 20,
-  });
-
-  activeIntroInterval = { startTime: tempIntroStart, endTime: tempIntroEnd, duration: duration };
-  broadcast('player:intro-detected', activeIntroInterval);
-  tempIntroStart = null;
-  tempIntroEnd = null;
-  broadcast('intro:mark-state', { start: null, end: null });
-  return { ...profile, acousticLearned: sigData.acousticLearned };
-});
-
-ipcMain.handle('intro:get-detected', () => activeIntroInterval);
-ipcMain.handle('intro:get-profiles', () => introStore.listProfiles());
-
-ipcMain.handle('intro:set-active-profile', async (_evt, id) => {
-  const ok = introStore.setActiveProfileId(id);
-  if (ok && player && player.currentTarget) {
-    const profile = introStore.getProfile(id);
-    introDetector.scanEpisodeForIntro(player.currentTarget, profile).then((res) => {
-      if (res.matched) {
-        activeIntroInterval = { startTime: res.startTime, endTime: res.endTime, duration: res.duration };
-        broadcast('player:intro-detected', activeIntroInterval);
-      }
-    }).catch(() => {});
-  }
-  return ok;
-});
-
-ipcMain.handle('intro:delete-profile', (_evt, id) => {
-  return introStore.deleteProfile(id);
-});
-
-ipcMain.handle('settings:get-auto-skip-intro', () => {
-  return !!settings.get('autoSkipIntro');
-});
-
-ipcMain.handle('settings:set-auto-skip-intro', (_evt, value) => {
-  settings.set('autoSkipIntro', !!value);
-  broadcast('settings:auto-skip-intro-changed', !!value);
-  return settings.getAll();
-});
 
 ipcMain.on('player:set-video-rect', (_evt, rect) => {
   lastVideoRect = rect;

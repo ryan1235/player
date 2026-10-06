@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "Aura Remote",
+    "slug": "aura-remote",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "auraplayer",
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.aura.player.remote",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "SEND",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "mimeType": "text/plain"
+            },
+            {
+              "mimeType": "video/*"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT",
+            "BROWSABLE"
+          ],
+          "data": [
+            {
+              "scheme": "http",
+              "mimeType": "video/*"
+            },
+            {
+              "scheme": "https",
+              "mimeType": "video/*"
+            },
+            {
+              "pathPattern": ".*\\.m3u8"
+            },
+            {
+              "pathPattern": ".*\\.mp4"
+            }
+          ]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-status-bar"
+    ]
+  }
+}

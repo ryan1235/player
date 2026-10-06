@@ -252,6 +252,7 @@
               <button class="settings-nav-item" data-settings="player" data-i18n="config.nav.player">Player</button>
               <button class="settings-nav-item" data-settings="ao-vivo" data-i18n="config.nav.aoVivo">Ao Vivo</button>
               <button class="settings-nav-item" data-settings="dlna" data-i18n="config.nav.dlna">DLNA</button>
+              <button class="settings-nav-item" data-settings="legendas" data-i18n="config.nav.legendas">Legendas</button>
               <button class="settings-nav-item" data-settings="avancado" data-i18n="config.nav.avancado">Avançado</button>
               <button class="settings-nav-item" data-settings="sobre" data-i18n="config.nav.sobre">Sobre</button>
             </nav>
@@ -470,27 +471,6 @@
                   </select>
                 </div>
 
-                <div class="setting-card">
-                  <div class="setting-info">
-                    <h4 data-i18n="player.autoSkipIntro.title">Pular aberturas automaticamente</h4>
-                    <p data-i18n="player.autoSkipIntro.hint">Avança automaticamente a abertura sem precisar clicar quando o intervalo ou padrão sonoro for reconhecido.</p>
-                  </div>
-                  <label class="switch">
-                    <input type="checkbox" id="chk-auto-skip-intro" />
-                    <span class="switch-track"><span class="switch-thumb"></span></span>
-                  </label>
-                </div>
-
-                <div class="setting-card setting-card-stack">
-                  <div class="setting-info">
-                    <h4 data-i18n="player.introProfiles.title">Assinaturas Acústicas & Aberturas Salvas</h4>
-                    <p data-i18n="player.introProfiles.hint">Perfis sonoros e intervalos aprendidos para pular abertura automaticamente em séries e animes.</p>
-                  </div>
-                  <div class="intro-profiles-list" id="intro-profiles-list">
-                    <!-- Gerado dinamicamente -->
-                  </div>
-                </div>
-
                 <div class="setting-card setting-card-stack">
                   <div class="setting-info">
                     <h4 data-i18n="player.shortcuts.title">Atalhos e Gestos</h4>
@@ -500,8 +480,7 @@
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.playPause">Reproduzir / pausar</span><kbd data-i18n="player.shortcuts.space">Espaço</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.back10">Voltar 10s</span><kbd>←</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.fwd10">Avançar 10s</span><kbd>→</kbd></div>
-                    <div class="shortcut-row"><span data-i18n="player.shortcuts.skipIntro">Pular abertura</span><kbd>S</kbd></div>
-                    <div class="shortcut-row"><span data-i18n="player.shortcuts.markIntro">Marcar abertura (início / fim)</span><kbd>I / O</kbd></div>
+                    <div class="shortcut-row"><span>Legendas (ligar / desligar)</span><kbd>C</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.mute">Mudo</span><kbd>M</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.pip">Picture-in-Picture</span><kbd>P</kbd></div>
                     <div class="shortcut-row"><span data-i18n="player.shortcuts.fullscreen">Tela cheia</span><kbd>F</kbd></div>
@@ -631,6 +610,89 @@
                     <input type="checkbox" id="chk-auto-reconnect" />
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                   </label>
+                </div>
+              </div>
+
+              <div class="settings-panel" data-panel="legendas">
+                <h3 class="settings-panel-title">Legendas Online (SubDL + OpenSubtitles)</h3>
+
+                <div class="setting-card setting-card-stack">
+                  <div class="setting-info">
+                    <h4>Chave da API do SubDL (Recomendado)</h4>
+                    <p class="hint">Gratuito: 2.000 buscas e 50 downloads/dia. <a href="https://subdl.com" target="_blank" class="link-external" id="link-subdl">Criar conta e pegar chave no subdl.com</a></p>
+                  </div>
+                  <div style="display:flex; gap:8px; width:100%; max-width:460px;">
+                    <input type="password" class="text-input" id="input-subdl-key" placeholder="Cole sua API Key do SubDL aqui" style="flex:1;" />
+                    <button class="btn-secondary" id="btn-toggle-subdl-key" type="button" style="padding:6px 12px;">Mostrar</button>
+                  </div>
+                  <div id="subdl-quota-display" class="hint" style="margin-top:6px; font-size:12px; color:#34d399;"></div>
+                </div>
+
+                <div class="setting-card setting-card-stack">
+                  <div class="setting-info">
+                    <h4>Chave da API do OpenSubtitles.com</h4>
+                    <p class="hint">Gratuito: 20 downloads/dia. <a href="https://www.opensubtitles.com" target="_blank" class="link-external" id="link-opensubtitles">Criar conta e pegar chave no opensubtitles.com</a></p>
+                  </div>
+                  <div style="display:flex; gap:8px; width:100%; max-width:460px;">
+                    <input type="password" class="text-input" id="input-opensubtitles-key" placeholder="Cole sua API Key do OpenSubtitles aqui" style="flex:1;" />
+                    <button class="btn-secondary" id="btn-toggle-opensubtitles-key" type="button" style="padding:6px 12px;">Mostrar</button>
+                  </div>
+                  <div id="opensubtitles-quota-display" class="hint" style="margin-top:6px; font-size:12px; color:#fbbf24;"></div>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4>Idioma padrão das legendas</h4>
+                    <p class="hint">Idioma prioritário para busca e download automático.</p>
+                  </div>
+                  <select class="select-input" id="sel-subtitles-lang">
+                    <option value="pob">Português (Brasil)</option>
+                    <option value="por">Português (Portugal)</option>
+                    <option value="eng">English</option>
+                    <option value="spa">Español</option>
+                  </select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4>Filtro e Prioridade de Legendas</h4>
+                    <p class="hint">Escolha se deseja priorizar ou filtrar apenas legendas Signs Only (placas e letreiros).</p>
+                  </div>
+                  <select class="select-input" id="sel-subtitles-mode">
+                    <option value="signs_priority">Priorizar Signs Only (Colocar no topo, mostrar todas)</option>
+                    <option value="signs_only">Apenas Signs Only (Exibir somente placas e letreiros)</option>
+                    <option value="all">Todas as Legendas (Ordem padrão completa)</option>
+                  </select>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4>Baixar automaticamente no próximo episódio</h4>
+                    <p class="hint">Ao trocar de episódio no DLNA (YouCine) ou na mesma sessão, o Aura Player baixa e aplica a legenda do próximo episódio automaticamente.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-subtitles-auto-next" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4>Pular abertura automaticamente (SkipDB)</h4>
+                    <p class="hint">Salta a abertura diretamente sem precisar clicar no botão durante a reprodução.</p>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" id="chk-skip-intro-auto" />
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                </div>
+
+                <div class="setting-card">
+                  <div class="setting-info">
+                    <h4>Cache local de legendas no computador</h4>
+                    <p class="hint">Legendas baixadas ficam salvas localmente para nunca gastar downloads da cota diária ao reassistir.</p>
+                  </div>
+                  <button class="btn-secondary" id="btn-clear-subtitles-cache">Limpar cache de legendas</button>
                 </div>
               </div>
 

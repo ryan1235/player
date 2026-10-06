@@ -32,33 +32,10 @@ const progressHit = document.getElementById('ov-progress-hit');
 const progressBuffered = document.getElementById('ov-progress-buffered');
 const progressPlayed = document.getElementById('ov-progress-played');
 const progressThumb = document.getElementById('ov-progress-thumb');
+const progressSegments = document.getElementById('ov-progress-segments');
 const tooltipEl = document.getElementById('ov-tooltip');
 
 const qualityInfoEl = document.getElementById('ov-quality-info');
-
-const btnSkipIntro = document.getElementById('btn-skip-intro');
-const progressIntro = document.getElementById('ov-progress-intro');
-const introHud = document.getElementById('ov-intro-hud');
-const btnCloseIntroHud = document.getElementById('btn-close-intro-hud');
-const btnMarkStart = document.getElementById('btn-mark-start');
-const btnMarkEnd = document.getElementById('btn-mark-end');
-const lblIntroStart = document.getElementById('lbl-intro-start');
-const lblIntroEnd = document.getElementById('lbl-intro-end');
-const btnSaveIntro = document.getElementById('btn-save-intro');
-
-const ovSeekFlash = document.getElementById('ov-seek-flash');
-const ovSkipRing = document.getElementById('ov-skip-ring');
-const ovSkipRingBar = document.getElementById('ov-skip-ring-bar');
-const ovSkipText = document.getElementById('ov-skip-text');
-const ovSkipKey = document.getElementById('ov-skip-key');
-const ovSkipCancelHint = document.getElementById('ov-skip-cancel-hint');
-
-let detectedIntro = null;
-let autoSkipIntro = false;
-let hasAutoSkipped = false;
-let autoSkipCancelledForCurrentMedia = false;
-let markedStartSec = null;
-let markedEndSec = null;
 
 const audioWrap = document.getElementById('ov-audio-wrap');
 const btnAudioMenu = document.getElementById('btn-audio-menu');
@@ -75,10 +52,20 @@ const speedMenu = document.getElementById('ov-speed-menu');
 const btnMore = document.getElementById('btn-more');
 const moreMenu = document.getElementById('ov-more-menu');
 
+const modalEl = document.getElementById('ov-modal');
 const modalBackdrop = document.getElementById('ov-modal-backdrop');
 const modalTitleEl = document.getElementById('ov-modal-title');
 const modalBodyEl = document.getElementById('ov-modal-body');
 const modalCloseBtn = document.getElementById('ov-modal-close');
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Nomes amigaveis pros codigos de idioma mais comuns que o mpv reporta
 // (ISO 639-1/639-2) — cai no codigo bruto em maiusculas se nao reconhecer.
@@ -512,12 +499,75 @@ function renderAudioMenu() {
 }
 registerDropdown('audio', btnAudioMenu, audioMenu, renderAudioMenu);
 
-// --- Menu de Legendas (contextual: só aparece se houver alguma faixa) ---
+// --- Menu de Legendas ---
 let subtitleTracks = [];
 let lastSubVisible = false;
+let currentSubState = null;
+
+function escapeHtml(str) {
+  return String(str || '').replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&#39;', '"': '&quot;' }[c]));
+}
+
+window.api.getSubtitlesState().then((st) => { currentSubState = st; }).catch(() => {});
+window.api.onSubtitlesStateChanged((st) => {
+  currentSubState = st;
+  if (subtitleMenu && subtitleMenu.classList.contains('open')) renderSubtitleMenu();
+});
+
 function renderSubtitleMenu() {
   subtitleMenu.innerHTML = '';
   const anySelected = subtitleTracks.some((t) => t.selected) && lastSubVisible;
+
+  // Se houver uma série ativa vinculada à sessão, exibe no topo
+  if (currentSubState && currentSubState.activeSeries) {
+    const s = currentSubState.activeSeries;
+    const seriesBadge = document.createElement('div');
+    seriesBadge.className = 'ov-menu-item';
+    seriesBadge.style.background = 'rgba(56, 189, 248, 0.12)';
+    seriesBadge.style.borderBottom = '1px solid rgba(56, 189, 248, 0.25)';
+    seriesBadge.style.color = '#38bdf8';
+    seriesBadge.style.fontSize = '11.5px';
+    seriesBadge.style.fontWeight = '600';
+    seriesBadge.innerHTML = `<span>📺 ${escapeHtml(s.title)} (S${s.season}E${s.currentEpisode})</span>`;
+    seriesBadge.title = 'Série ativa na sessão. Clique para gerenciar.';
+    seriesBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeDropdowns();
+      openSubtitlesModal(true);
+    });
+    subtitleMenu.appendChild(seriesBadge);
+  }
+
+  // Opção: Buscar legenda online
+  const searchOnlineItem = document.createElement('button');
+  searchOnlineItem.type = 'button';
+  searchOnlineItem.className = 'ov-menu-item';
+  searchOnlineItem.innerHTML = '<span>🔍 Buscar legenda online...</span>';
+  searchOnlineItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDropdowns();
+    openSubtitlesModal(false);
+  });
+  subtitleMenu.appendChild(searchOnlineItem);
+
+  // Opção: Vincular Série
+  const bindItem = document.createElement('button');
+  bindItem.type = 'button';
+  bindItem.className = 'ov-menu-item';
+  bindItem.innerHTML = '<span>📺 Vincular Série (Sessão)...</span>';
+  bindItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDropdowns();
+    openSubtitlesModal(true);
+  });
+  subtitleMenu.appendChild(bindItem);
+
+  // Divisor
+  const sepTop = document.createElement('div');
+  sepTop.style.height = '1px';
+  sepTop.style.background = 'rgba(255, 255, 255, 0.1)';
+  sepTop.style.margin = '4px 0';
+  subtitleMenu.appendChild(sepTop);
 
   const offItem = document.createElement('button');
   offItem.type = 'button';
@@ -532,21 +582,55 @@ function renderSubtitleMenu() {
   });
   subtitleMenu.appendChild(offItem);
 
-  subtitleTracks.forEach((t) => {
-    const active = anySelected && t.selected;
-    const item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'ov-menu-item' + (active ? ' active' : '');
-    item.setAttribute('role', 'menuitemradio');
-    item.setAttribute('aria-checked', active ? 'true' : 'false');
-    item.innerHTML = `<span>${trackLabel(t)}</span><span class="ov-menu-check">✓</span>`;
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.api.setSubtitleTrack(t.id).catch(() => {});
-      closeDropdowns();
+  if (subtitleTracks.length === 0) {
+    const emptyItem = document.createElement('div');
+    emptyItem.className = 'ov-menu-item';
+    emptyItem.style.opacity = '0.5';
+    emptyItem.style.pointerEvents = 'none';
+    emptyItem.innerHTML = '<span>Nenhuma faixa embutida</span>';
+    subtitleMenu.appendChild(emptyItem);
+  } else {
+    subtitleTracks.forEach((t) => {
+      const active = anySelected && t.selected;
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'ov-menu-item' + (active ? ' active' : '');
+      item.setAttribute('role', 'menuitemradio');
+      item.setAttribute('aria-checked', active ? 'true' : 'false');
+      item.innerHTML = `<span>${trackLabel(t)}</span><span class="ov-menu-check">✓</span>`;
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.api.setSubtitleTrack(t.id).catch(() => {});
+        closeDropdowns();
+      });
+      subtitleMenu.appendChild(item);
     });
-    subtitleMenu.appendChild(item);
+  }
+
+  // Divisor e opção para adicionar arquivo externo
+  const sep = document.createElement('div');
+  sep.style.height = '1px';
+  sep.style.background = 'rgba(255, 255, 255, 0.1)';
+  sep.style.margin = '4px 0';
+  subtitleMenu.appendChild(sep);
+
+  const addItem = document.createElement('button');
+  addItem.type = 'button';
+  addItem.className = 'ov-menu-item';
+  addItem.innerHTML = '<span>+ Carregar arquivo (.srt, .vtt)...</span>';
+  addItem.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    closeDropdowns();
+    try {
+      const file = await window.api.addSubtitleFile();
+      if (file) {
+        showToast('Legenda carregada com sucesso');
+      }
+    } catch (err) {
+      showToast('Erro ao carregar legenda: ' + err.message);
+    }
   });
+  subtitleMenu.appendChild(addItem);
 }
 registerDropdown('subtitle', btnSubtitleMenu, subtitleMenu, renderSubtitleMenu);
 
@@ -581,7 +665,6 @@ let currentTargetUrl = null;
 function renderMoreMenu() {
   moreMenu.innerHTML = '';
   const items = [
-    { label: 'Marcar Abertura (Episódio 1)', onClick: () => { introHud.hidden = false; } },
     { label: 'Forçar modo VOD/Live', onClick: () => window.api.toggleLiveMode() },
     { label: 'Informações', onClick: () => openInfoModal() },
     { label: 'Estatísticas', onClick: () => openStatsModal() },
@@ -622,20 +705,31 @@ window.api.getAlwaysOnTop().then((v) => { alwaysOnTop = v; }).catch(() => {});
 let modalOpen = false;
 let statsModalOpen = false;
 
-function openModal(title) {
+function openModal(title, wide = false) {
   closeDropdowns();
   modalTitleEl.textContent = title;
+  if (modalEl) modalEl.classList.toggle('ov-modal-wide', !!wide);
   modalOpen = true;
   modalBackdrop.hidden = false;
+  if (window.api && window.api.focusOverlay) {
+    window.api.focusOverlay().catch(() => {});
+  }
   // requestAnimationFrame garante que o browser aplique o estado inicial
   // (hidden removido) antes de disparar a transicao de entrada.
-  requestAnimationFrame(() => modalBackdrop.classList.add('open'));
+  requestAnimationFrame(() => {
+    modalBackdrop.classList.add('open');
+    window.focus();
+  });
 }
 
 function closeModal() {
   modalOpen = false;
   statsModalOpen = false;
   modalBackdrop.classList.remove('open');
+  if (modalEl) modalEl.classList.remove('ov-modal-wide');
+  if (window.api && window.api.focusMainWindow) {
+    window.api.focusMainWindow().catch(() => {});
+  }
   setTimeout(() => { if (!modalOpen) modalBackdrop.hidden = true; }, 160);
 }
 
@@ -698,6 +792,1215 @@ function openStatsModal() {
   renderStatsBody();
 }
 
+// Helper para verificar se um título é válido e não um hash/URL de streaming do YouCine/DLNA
+function isCleanMediaTitle(str) {
+  if (!str || typeof str !== 'string') return false;
+  const s = str.trim();
+  if (!s || s.length < 2) return false;
+  if (/^https?:\/\//i.test(s)) return false;
+  if (/content_auth|auth_token|sign=|token=|auth=/i.test(s)) return false;
+  if (/^[0-9a-fA-F]{24,}/i.test(s)) return false;
+  if (/^dlna-video/i.test(s)) return false;
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-/i.test(s)) return false;
+  if (/^videoplayback/i.test(s)) return false;
+  return true;
+}
+
+// Helper inteligente para detectar título, temporada e episódio do fluxo/URL/série ativa/histórico
+function detectCandidateMediaInfo(activeSeries, recentSeries, targetUrl, npTitle, castTitle) {
+  let title = '';
+  let season = 1;
+  let episode = 1;
+  let found = false;
+
+  // 1. Se já tem série ativa válida
+  if (activeSeries && activeSeries.title && isCleanMediaTitle(activeSeries.title)) {
+    return {
+      title: activeSeries.title,
+      season: Number(activeSeries.season) || 1,
+      episode: Number(activeSeries.currentEpisode) || 1,
+      imdbId: activeSeries.imdbId || null,
+      found: true,
+      source: 'active',
+    };
+  }
+
+  // 2. Extrai de URLs ou nomes de exibição
+  const candidates = [castTitle, npTitle, targetUrl].filter(Boolean);
+  for (const rawStr of candidates) {
+    if (!rawStr || typeof rawStr !== 'string') continue;
+    const clean = (rawStr.split(/[?#]/)[0].split(/[\\/]/).pop() || '').replace(/\.[a-z0-9]{2,4}$/i, '');
+    if (!clean || isGarbageTitle(clean)) continue;
+
+    // Padrão S01E02 ou 1x02
+    const seMatch = /(.*?)[ ._\-]+(?:s(\d{1,2})[ ._\-]*e(\d{1,3})|(\d{1,2})x(\d{1,3}))/i.exec(clean);
+    if (seMatch) {
+      const rawTitle = (seMatch[1] || '').replace(/[\._\-]/g, ' ').replace(/\s+(1080p|720p|bluray|web-dl|x264|x265|hevc|aac).*$/i, '').trim();
+      if (isCleanMediaTitle(rawTitle)) {
+        title = rawTitle;
+        season = parseInt(seMatch[2] || seMatch[4], 10);
+        episode = parseInt(seMatch[3] || seMatch[5], 10);
+        found = true;
+        break;
+      }
+    }
+
+    // Padrão Temporada X Episodio Y
+    const tempEpMatch = /(.*?)[ ._\-]+(?:temp(?:orada)?[ ._\-]*(\d{1,2}))[ ._\-]+(?:ep(?:is[oó]dio)?|e)[ ._\-]*(\d{1,3})/i.exec(clean);
+    if (tempEpMatch) {
+      const rawTitle = (tempEpMatch[1] || '').replace(/[\._\-]/g, ' ').replace(/\s+(1080p|720p|bluray|web-dl|x264|x265|hevc|aac).*$/i, '').trim();
+      if (isCleanMediaTitle(rawTitle)) {
+        title = rawTitle;
+        season = parseInt(tempEpMatch[2], 10);
+        episode = parseInt(tempEpMatch[3], 10);
+        found = true;
+        break;
+      }
+    }
+
+    // Padrão Ep 02 ou E02 sem temporada explícita
+    const epMatch = /(.*?)[ ._\-]+(?:ep(?:is[oó]dio)?|e)[ ._\-]*(\d{1,3})/i.exec(clean);
+    if (epMatch) {
+      const rawTitle = (epMatch[1] || '').replace(/[\._\-]/g, ' ').replace(/\s+(1080p|720p|bluray|web-dl|x264|x265|hevc|aac).*$/i, '').trim();
+      if (isCleanMediaTitle(rawTitle)) {
+        title = rawTitle;
+        season = 1;
+        episode = parseInt(epMatch[2], 10);
+        found = true;
+        break;
+      }
+    }
+
+    // Fallback: tenta pegar apenas título limpo
+    const plainTitle = clean.replace(/[\._\-]/g, ' ').replace(/\s+(1080p|720p|bluray|web-dl|x264|x265|hevc|aac).*$/i, '').trim();
+    if (isCleanMediaTitle(plainTitle) && !title) {
+      title = plainTitle;
+    }
+  }
+
+  // 3. Se não achou temporada/episódio, mas tem série recente compatível no histórico
+  if (Array.isArray(recentSeries) && recentSeries.length > 0) {
+    const top = recentSeries[0];
+    if (!title && top.title) {
+      title = top.title;
+    }
+    if (!found && top.title && (!title || title.toLowerCase().includes(top.title.toLowerCase()) || top.title.toLowerCase().includes(title.toLowerCase()))) {
+      season = Number(top.season) || 1;
+      episode = (Number(top.episode) || 0) + 1;
+      return {
+        title: top.title,
+        season,
+        episode,
+        imdbId: top.imdbId || null,
+        found: true,
+        source: 'recent',
+      };
+    }
+  }
+
+  return {
+    title,
+    season,
+    episode,
+    imdbId: null,
+    found,
+    source: found ? 'parsed' : 'default',
+  };
+}
+
+// --- Modal de Legendas Online & Sessão de Séries ---
+async function openSubtitlesModal(autoFocusBind = false) {
+  openModal(autoFocusBind ? 'VINCULAR SÉRIE' : 'LEGENDAS ONLINE', true);
+  modalBodyEl.innerHTML = '<div class="ov-info-row"><span>Carregando dados...</span></div>';
+
+  const state = await window.api.getSubtitlesState().catch(() => null);
+  currentSubState = state;
+
+  const isConfigured = state && (state.subdlConfigured || state.openSubtitlesConfigured);
+  const activeSeries = state ? state.activeSeries : null;
+  const recentSeries = (state && state.recentSeries) || [];
+  const quota = state && state.quota;
+
+  const npText = nowPlayingTitle && nowPlayingTitle.textContent ? nowPlayingTitle.textContent : '';
+  const detected = detectCandidateMediaInfo(
+    activeSeries,
+    recentSeries,
+    currentTargetUrl,
+    npText,
+    pendingCastTitle
+  );
+
+  let candidateTitle = detected.title || '';
+  if (!candidateTitle && currentTargetUrl) {
+    const raw = (currentTargetUrl.split(/[\\/]/).pop() || '').replace(/\.[a-z0-9]{2,4}$/i, '');
+    if (isCleanMediaTitle(raw)) {
+      const cleaned = raw.replace(/[\._\-]/g, ' ').replace(/\s+(s\d+e\d+|\d+p|1080p|720p|bluray|web-dl|x264|x265|hevc|aac).*$/i, '').trim();
+      if (isCleanMediaTitle(cleaned)) {
+        candidateTitle = cleaned;
+      }
+    }
+  }
+
+  let html = '<div class="ov-sub-box">';
+
+  // 1. Quota Bar ou Aviso de Configuração
+  if (!isConfigured) {
+    html += `
+      <div class="ov-sub-banner">
+        💡 Configure suas chaves gratuitas do <strong>SubDL</strong> ou <strong>OpenSubtitles</strong> em <strong>Configurações &gt; Legendas</strong> para buscar e baixar legendas online.
+      </div>
+    `;
+  } else if (quota) {
+    html += `
+      <div class="ov-sub-quotas-bar">
+        ${state.subdlConfigured ? `<span class="ov-sub-quota-pill ov-sub-quota-subdl">SubDL: ${quota.subdl.remaining}/${quota.subdl.max} hoje</span>` : ''}
+        ${state.openSubtitlesConfigured ? `<span class="ov-sub-quota-pill ov-sub-quota-os">OpenSubtitles: ${quota.openSubtitles.remaining}/${quota.openSubtitles.max} hoje</span>` : ''}
+      </div>
+    `;
+  }
+
+  // 2. Série Ativa (se houver)
+  if (activeSeries) {
+    html += `
+      <div class="ov-sub-active-bar">
+        <div>
+          <span style="color:#38bdf8; font-weight:600;">📺 Série Ativa:</span>
+          <strong>${escapeHtml(activeSeries.title)}</strong> (T${activeSeries.season} E${activeSeries.currentEpisode})
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="ov-sub-btn-primary" id="btn-sub-advance" style="padding:4px 8px; font-size:11px;" title="Avançar para o próximo episódio">Próximo Ep (+1)</button>
+          <button type="button" class="ov-sub-btn-secondary" id="btn-sub-unbind" style="padding:4px 8px; font-size:11px;">Desvincular</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // 3. Séries Recentes
+  if (recentSeries.length > 0) {
+    html += `
+      <div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">Séries Recentes:</div>
+        <div class="ov-sub-chips-wrap">
+          ${recentSeries.map((s) => `
+            <button type="button" class="ov-sub-chip" data-title="${escapeHtml(s.title)}" data-season="${s.season}" data-episode="${s.episode}" data-imdb="${escapeHtml(s.imdbId || '')}">
+              ${escapeHtml(s.title)} (Ep ${s.episode})
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // 4. Seção de Busca no Catálogo Cinemeta com Auto Seleção de Temp e Ep
+  html += `
+    <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+        <div class="ov-sub-section-title">Buscar no Catálogo &amp; Vincular</div>
+        ${detected.source === 'parsed' ? `<span style="font-size:11px; color:#38bdf8; font-weight:500;">✨ Detectado: T${detected.season} E${detected.episode}</span>` : (detected.source === 'recent' ? `<span style="font-size:11px; color:#38bdf8; font-weight:500;">🔄 Sugerido: Ep ${detected.episode}</span>` : '')}
+      </div>
+      <div class="ov-sub-search-row" style="margin-top:4px; flex-wrap:wrap; gap:8px;">
+        <div class="ov-sub-search-field" style="flex:2; min-width:180px;">
+          <svg class="ov-sub-search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" class="ov-sub-input ov-sub-input-catalog" id="catalog-search-input" placeholder="Ex: Solo Leveling, Frieren, Game of Thrones..." value="${escapeHtml(candidateTitle)}" />
+          <button type="button" class="ov-sub-clear-btn" id="catalog-clear-btn" title="Limpar" ${candidateTitle ? '' : 'hidden'}>&times;</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <label for="quick-input-season" style="font-size:11.5px; color:var(--text-muted); font-weight:600;">Temp:</label>
+          <input type="number" id="quick-input-season" class="ov-sub-input ov-sub-input-small" style="width:52px; padding:7px 4px; text-align:center;" min="1" max="99" value="${detected.season}" title="Temporada auto-selecionada (editável)" />
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <label for="quick-input-episode" style="font-size:11.5px; color:var(--text-muted); font-weight:600;">Ep:</label>
+          <input type="number" id="quick-input-episode" class="ov-sub-input ov-sub-input-small" style="width:58px; padding:7px 4px; text-align:center;" min="1" max="999" value="${detected.episode}" title="Episódio auto-selecionado (editável)" />
+        </div>
+        <button type="button" class="ov-sub-btn-primary" id="btn-catalog-search">Buscar</button>
+      </div>
+    </div>
+
+    <!-- Resultados do Catálogo (sugestões com poster) -->
+    <div id="catalog-results-box" class="ov-catalog-results-box" hidden></div>
+
+    <!-- Painel da Obra Selecionada -->
+    <div id="selected-show-box" class="ov-sub-selected-card" hidden>
+      <div class="ov-sub-selected-header">
+        <img id="sel-show-poster" class="ov-sub-selected-poster" src="" onerror="this.style.display='none'" />
+        <div style="flex:1; min-width:0;">
+          <div id="sel-show-title" class="ov-sub-selected-title">Nome da Obra</div>
+          <div id="sel-show-meta" class="ov-sub-selected-meta">Ano · Tipo</div>
+        </div>
+        <button type="button" id="btn-change-show" class="ov-sub-btn-secondary" style="padding:4px 8px; font-size:11px;">Trocar</button>
+      </div>
+      <div id="sel-series-controls" class="ov-sub-series-controls">
+        <div class="ov-sub-control-group">
+          <label for="sel-season-dropdown">Temporada:</label>
+          <select id="sel-season-dropdown" class="ov-sub-select"></select>
+        </div>
+        <div class="ov-sub-control-group" style="flex:2;">
+          <label for="sel-episode-dropdown">Episódio:</label>
+          <select id="sel-episode-dropdown" class="ov-sub-select"></select>
+        </div>
+      </div>
+      <label class="ov-sub-checkbox-label">
+        <input type="checkbox" id="chk-auto-bind" checked />
+        <span>Vincular como série ativa (avança ep automaticamente no YouCine/DLNA)</span>
+      </label>
+      <button type="button" id="btn-fetch-subtitles" class="ov-sub-btn-primary ov-sub-btn-block">
+        🔍 Buscar Legendas (SubDL + OpenSubtitles)
+      </button>
+    </div>
+
+    <!-- Barra de Filtros e Modo de Legenda -->
+    <div class="ov-sub-filter-row" id="ov-sub-filter-row" style="display:none;">
+      <div class="ov-sub-filter-pills" id="ov-sub-filter-pills">
+        <button type="button" class="ov-sub-filter-pill active" data-filter="all">Todas (<span id="cnt-sub-all">0</span>)</button>
+        <button type="button" class="ov-sub-filter-pill ov-sub-filter-pill-signs" data-filter="signs">✨ Signs Only (<span id="cnt-sub-signs">0</span>)</button>
+        <button type="button" class="ov-sub-filter-pill ov-sub-filter-pill-forced" data-filter="forced">⚡ Forced (<span id="cnt-sub-forced">0</span>)</button>
+        <button type="button" class="ov-sub-filter-pill" data-filter="full">💬 Completas (<span id="cnt-sub-full">0</span>)</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <label for="sub-mode-quick-select" style="font-size:10.5px; color:var(--text-muted);">Modo:</label>
+        <select id="sub-mode-quick-select" class="ov-sub-select-inline" title="Modo padrão de filtro e prioridade de legendas">
+          <option value="signs_priority">✨ Priorizar Signs Only</option>
+          <option value="signs_only">✨ Apenas Signs Only</option>
+          <option value="all">🌐 Todas as Legendas</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Lista de Resultados de Legendas Encontradas -->
+    <div class="ov-sub-results-list" id="sub-results-container">
+      <div style="text-align:center; padding:12px; color:rgba(255,255,255,0.4); font-size:11.5px;">
+        Busque uma série ou filme acima para selecionar o episódio e baixar a legenda.
+      </div>
+    </div>
+
+    <!-- Modo Manual Avulso (Accordion) -->
+    <details class="ov-sub-manual-details">
+      <summary>Busca manual direta (sem catálogo)</summary>
+      <div class="ov-sub-manual-inputs">
+        <input type="text" id="manual-input-title" class="ov-sub-input ov-sub-input-main" placeholder="Título exato..." value="${escapeHtml(candidateTitle)}" />
+        <input type="number" id="manual-input-season" class="ov-sub-input ov-sub-input-small" placeholder="Temp" value="${detected.season}" min="1" />
+        <input type="number" id="manual-input-episode" class="ov-sub-input ov-sub-input-small" placeholder="Ep" value="${detected.episode}" min="1" />
+        <button type="button" id="btn-manual-search" class="ov-sub-search-btn">Buscar</button>
+      </div>
+    </details>
+  </div>`;
+
+  modalBodyEl.innerHTML = html;
+
+  // Elementos do DOM
+  const btnUnbind = document.getElementById('btn-sub-unbind');
+  const btnAdvance = document.getElementById('btn-sub-advance');
+  const catalogInput = document.getElementById('catalog-search-input');
+  const catalogClearBtn = document.getElementById('catalog-clear-btn');
+  const quickInputSeason = document.getElementById('quick-input-season');
+  const quickInputEpisode = document.getElementById('quick-input-episode');
+  const btnCatalogSearch = document.getElementById('btn-catalog-search');
+  const catalogResultsBox = document.getElementById('catalog-results-box');
+
+  const selectedShowBox = document.getElementById('selected-show-box');
+  const selShowPoster = document.getElementById('sel-show-poster');
+  const selShowTitle = document.getElementById('sel-show-title');
+  const selShowMeta = document.getElementById('sel-show-meta');
+  const btnChangeShow = document.getElementById('btn-change-show');
+  const selSeriesControls = document.getElementById('sel-series-controls');
+  const selSeasonDropdown = document.getElementById('sel-season-dropdown');
+  const selEpisodeDropdown = document.getElementById('sel-episode-dropdown');
+  const chkAutoBind = document.getElementById('chk-auto-bind');
+  const btnFetchSubtitles = document.getElementById('btn-fetch-subtitles');
+
+  const subFilterRow = document.getElementById('ov-sub-filter-row');
+  const subFilterPills = document.getElementById('ov-sub-filter-pills');
+  const subModeQuickSelect = document.getElementById('sub-mode-quick-select');
+  const cntSubAll = document.getElementById('cnt-sub-all');
+  const cntSubSigns = document.getElementById('cnt-sub-signs');
+  const cntSubForced = document.getElementById('cnt-sub-forced');
+  const cntSubFull = document.getElementById('cnt-sub-full');
+  const resultsContainer = document.getElementById('sub-results-container');
+
+  const btnManualSearch = document.getElementById('btn-manual-search');
+  const manualInputTitle = document.getElementById('manual-input-title');
+  const manualInputSeason = document.getElementById('manual-input-season');
+  const manualInputEpisode = document.getElementById('manual-input-episode');
+
+  let currentSelectedShow = null;
+  let lastSearchResults = [];
+  let currentSearchQuery = '';
+  let currentSearchSeason = 1;
+  let currentSearchEpisode = 1;
+  let currentSubtitlesMode = (state && state.subtitlesMode) || 'signs_priority';
+  let currentFilter = currentSubtitlesMode === 'signs_only' ? 'signs' : 'all';
+
+  if (subModeQuickSelect) {
+    subModeQuickSelect.value = currentSubtitlesMode;
+    subModeQuickSelect.addEventListener('change', async () => {
+      currentSubtitlesMode = subModeQuickSelect.value;
+      try {
+        await window.api.saveSubtitlesConfig({ subtitlesMode: currentSubtitlesMode });
+        showToast(`Modo alterado: ${subModeQuickSelect.options[subModeQuickSelect.selectedIndex].text}`);
+      } catch (e) {
+        // ignore
+      }
+      if (currentSubtitlesMode === 'signs_only') {
+        currentFilter = 'signs';
+      } else if (currentFilter === 'signs' && currentSubtitlesMode === 'all') {
+        currentFilter = 'all';
+      }
+      updateFilterPillUi();
+      renderSubtitleResults();
+    });
+  }
+
+  function updateFilterPillUi() {
+    if (!subFilterPills) return;
+    subFilterPills.querySelectorAll('.ov-sub-filter-pill').forEach((pill) => {
+      if (pill.getAttribute('data-filter') === currentFilter) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+    });
+  }
+
+  if (subFilterPills) {
+    subFilterPills.querySelectorAll('.ov-sub-filter-pill').forEach((pill) => {
+      pill.addEventListener('click', () => {
+        currentFilter = pill.getAttribute('data-filter') || 'all';
+        updateFilterPillUi();
+        renderSubtitleResults();
+      });
+    });
+  }
+
+  if (btnUnbind) {
+    btnUnbind.addEventListener('click', async () => {
+      await window.api.unbindSeries();
+      showToast('Série desvinculada');
+      openSubtitlesModal(autoFocusBind);
+    });
+  }
+
+  if (btnAdvance && activeSeries) {
+    btnAdvance.addEventListener('click', async () => {
+      const nextEp = activeSeries.currentEpisode + 1;
+      await window.api.bindSeries({
+        title: activeSeries.title,
+        season: activeSeries.season,
+        episode: nextEp,
+        imdbId: activeSeries.imdbId,
+      });
+      showToast(`Avançado para Ep ${nextEp}`);
+      openSubtitlesModal(autoFocusBind);
+    });
+  }
+
+  if (catalogClearBtn) {
+    catalogClearBtn.addEventListener('click', () => {
+      catalogInput.value = '';
+      catalogClearBtn.hidden = true;
+      catalogResultsBox.hidden = true;
+      catalogResultsBox.innerHTML = '';
+      catalogInput.focus();
+    });
+  }
+
+  if (btnChangeShow) {
+    btnChangeShow.addEventListener('click', () => {
+      selectedShowBox.hidden = true;
+      currentSelectedShow = null;
+      catalogResultsBox.hidden = false;
+      catalogInput.focus();
+    });
+  }
+
+  if (catalogInput) {
+    setTimeout(() => {
+      catalogInput.focus();
+      if (catalogInput.value && catalogInput.select) {
+        catalogInput.select();
+      }
+    }, 60);
+  }
+
+  function renderSubtitleResults() {
+    if (!lastSearchResults || lastSearchResults.length === 0) return;
+
+    let filtered = lastSearchResults;
+    if (currentFilter === 'signs') {
+      filtered = lastSearchResults.filter((item) => item.classification && item.classification.isSignsOnly);
+    } else if (currentFilter === 'forced') {
+      filtered = lastSearchResults.filter((item) => item.classification && (item.classification.isForced || item.classification.type === 'foreign_parts') && !item.classification.isSignsOnly);
+    } else if (currentFilter === 'full') {
+      filtered = lastSearchResults.filter((item) => !item.classification || (!item.classification.isSignsOnly && !item.classification.isForced && item.classification.type !== 'foreign_parts'));
+    }
+
+    if (filtered.length === 0) {
+      const filterLabels = {
+        signs: 'Signs Only (apenas placas/textos visuais)',
+        forced: 'Forced (forçada)',
+        full: 'Completas / Diálogos',
+      };
+      const label = filterLabels[currentFilter] || currentFilter;
+      resultsContainer.innerHTML = `
+        <div style="text-align:center; padding:16px; color:rgba(255,255,255,0.7); font-size:12px;">
+          Nenhuma legenda encontrada na categoria <strong>${escapeHtml(label)}</strong>.<br>
+          <button type="button" class="ov-sub-btn-secondary" id="btn-fallback-show-all" style="margin-top:10px; font-size:11.5px; padding:6px 12px;">
+            Exibir todas as ${lastSearchResults.length} legendas encontradas
+          </button>
+        </div>
+      `;
+      const btnFallback = document.getElementById('btn-fallback-show-all');
+      if (btnFallback) {
+        btnFallback.addEventListener('click', () => {
+          currentFilter = 'all';
+          updateFilterPillUi();
+          renderSubtitleResults();
+        });
+      }
+      return;
+    }
+
+    resultsContainer.innerHTML = '';
+    filtered.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'ov-sub-result-item';
+      const providerBadge = item.provider === 'subdl'
+        ? '<span class="ov-sub-badge ov-sub-badge-subdl">SubDL</span>'
+        : '<span class="ov-sub-badge ov-sub-badge-os">OpenSub</span>';
+      const langBadge = `<span class="ov-sub-badge ov-sub-badge-lang">${escapeHtml(item.lang || 'PT-BR')}</span>`;
+
+      let typeBadge = '';
+      if (item.classification && item.classification.type) {
+        const type = item.classification.type;
+        if (type.startsWith('signs') || type === 'forced_signs' || type === 'text_only') {
+          typeBadge = `<span class="ov-sub-badge ov-sub-badge-signs" title="${escapeHtml(item.classification.reason)}">✨ ${escapeHtml(item.classification.category)}</span>`;
+        } else if (type === 'forced' || type === 'foreign_parts') {
+          typeBadge = `<span class="ov-sub-badge ov-sub-badge-forced" title="${escapeHtml(item.classification.reason)}">⚡ ${escapeHtml(item.classification.category)}</span>`;
+        } else if (type === 'hi_sdh') {
+          typeBadge = `<span class="ov-sub-badge ov-sub-badge-hi" title="${escapeHtml(item.classification.reason)}">👂 CC/SDH</span>`;
+        }
+      }
+
+      row.innerHTML = `
+        <div style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap;">
+            ${providerBadge}
+            ${langBadge}
+            ${typeBadge}
+            ${item.downloads ? `<span style="font-size:10.5px; opacity:0.6;">${item.downloads} downloads</span>` : ''}
+          </div>
+          <div style="font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(item.release || item.title)}">
+            ${escapeHtml(item.release || item.title)}
+          </div>
+        </div>
+        <button type="button" class="ov-sub-btn-primary" style="padding:6px 10px; font-size:11.5px; white-space:nowrap;">Aplicar</button>
+      `;
+
+      const applyBtn = row.querySelector('button');
+      applyBtn.addEventListener('click', async () => {
+        applyBtn.disabled = true;
+        applyBtn.textContent = 'Baixando...';
+        try {
+          await window.api.downloadAndApplySubtitle({
+            provider: item.provider,
+            downloadPayload: item.downloadPayload,
+            seriesTitle: currentSearchQuery,
+            season: currentSearchSeason || 1,
+            episode: currentSearchEpisode || 1,
+          });
+          closeModal();
+          showToast('Legenda PT-BR aplicada com sucesso!');
+        } catch (err) {
+          applyBtn.disabled = false;
+          applyBtn.textContent = 'Erro';
+          showToast('Erro ao aplicar: ' + err.message);
+        }
+      });
+
+      resultsContainer.appendChild(row);
+    });
+  }
+
+  // Busca e aplica legendas
+  const executeSubtitleSearch = async ({ query, imdbId, season, episode, aliases = [] }) => {
+    if (!query) return;
+    currentSearchQuery = query;
+    currentSearchSeason = season;
+    currentSearchEpisode = episode;
+
+    resultsContainer.innerHTML = '<div style="text-align:center; padding:16px; color:rgba(255,255,255,0.7);">Buscando legendas PT-BR no SubDL e OpenSubtitles...</div>';
+    if (subFilterRow) subFilterRow.style.display = 'none';
+    if (btnFetchSubtitles) btnFetchSubtitles.disabled = true;
+
+    try {
+      if (chkAutoBind && chkAutoBind.checked && season && episode) {
+        await window.api.bindSeries({
+          title: query,
+          season,
+          episode,
+          imdbId,
+        });
+      }
+
+      const results = await window.api.searchSubtitles({
+        query,
+        imdbId,
+        season,
+        episode,
+        aliases,
+      });
+      if (btnFetchSubtitles) btnFetchSubtitles.disabled = false;
+
+      if (!results || results.length === 0) {
+        resultsContainer.innerHTML = `
+          <div style="text-align:center; padding:14px; color:rgba(255,255,255,0.5);">
+            Nenhuma legenda encontrada para este episódio.<br>
+            <small style="opacity:0.7">Tente a busca manual com variações do nome se necessário.</small>
+          </div>
+        `;
+        return;
+      }
+
+      lastSearchResults = results;
+
+      // Atualiza contadores
+      const countAll = results.length;
+      const countSigns = results.filter((r) => r.classification && r.classification.isSignsOnly).length;
+      const countForced = results.filter((r) => r.classification && (r.classification.isForced || r.classification.type === 'foreign_parts') && !r.classification.isSignsOnly).length;
+      const countFull = results.filter((r) => !r.classification || (!r.classification.isSignsOnly && !r.classification.isForced && r.classification.type !== 'foreign_parts')).length;
+
+      if (cntSubAll) cntSubAll.textContent = countAll;
+      if (cntSubSigns) cntSubSigns.textContent = countSigns;
+      if (cntSubForced) cntSubForced.textContent = countForced;
+      if (cntSubFull) cntSubFull.textContent = countFull;
+
+      // Se o modo for 'signs_only', seleciona 'signs' se houver
+      if (currentSubtitlesMode === 'signs_only') {
+        currentFilter = countSigns > 0 ? 'signs' : 'all';
+      }
+      updateFilterPillUi();
+
+      if (subFilterRow) subFilterRow.style.display = 'flex';
+      renderSubtitleResults();
+    } catch (err) {
+      if (btnFetchSubtitles) btnFetchSubtitles.disabled = false;
+      resultsContainer.innerHTML = `<div style="text-align:center; padding:12px; color:#f87171;">Erro na busca: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+
+  // Seleciona um item do catálogo e carrega suas temporadas/episódios
+  const selectShow = async (item, options = null) => {
+    catalogResultsBox.hidden = true;
+    selectedShowBox.hidden = false;
+    selShowTitle.textContent = item.name;
+    selShowMeta.textContent = `${item.year || ''} · ${item.type === 'series' ? 'Série' : 'Filme'}`;
+    if (item.poster) {
+      selShowPoster.src = item.poster;
+      selShowPoster.style.display = 'block';
+    } else {
+      selShowPoster.style.display = 'none';
+    }
+
+    selectedShowBox.style.opacity = '0.7';
+    const details = await window.api.getCatalogDetails(item.id, item.type).catch(() => null);
+    selectedShowBox.style.opacity = '1';
+
+    currentSelectedShow = details || item;
+    const isSeries = (currentSelectedShow.type || item.type) === 'series';
+
+    if (details && (details.ptTitle || details.originalTitle)) {
+      selShowTitle.innerHTML = `
+        ${escapeHtml(details.name)}
+        ${details.ptTitle ? `<span style="display:block; font-size:12px; font-weight:500; color:#38bdf8; margin-top:2px;">🇧🇷 ${escapeHtml(details.ptTitle)}</span>` : ''}
+      `;
+      const metaParts = [`${item.year || ''}`, isSeries ? 'Série' : 'Filme'];
+      if (details.originalTitle && details.originalTitle !== details.name) {
+        metaParts.push(details.originalTitle);
+      }
+      selShowMeta.textContent = metaParts.filter(Boolean).join(' · ');
+    } else {
+      selShowTitle.textContent = item.name;
+      selShowMeta.textContent = `${item.year || ''} · ${isSeries ? 'Série' : 'Filme'}`;
+    }
+
+    if (!isSeries) {
+      selSeriesControls.hidden = true;
+    } else {
+      selSeriesControls.hidden = false;
+      selSeasonDropdown.innerHTML = '';
+      selEpisodeDropdown.innerHTML = '';
+
+      const seasons = (currentSelectedShow.seasons && currentSelectedShow.seasons.length > 0)
+        ? currentSelectedShow.seasons
+        : [1];
+
+      seasons.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = `Temporada ${s}`;
+        selSeasonDropdown.appendChild(opt);
+      });
+
+      const populateEpisodes = (sNum) => {
+        selEpisodeDropdown.innerHTML = '';
+        const eps = (currentSelectedShow.episodesBySeason && currentSelectedShow.episodesBySeason[sNum]) || [];
+        if (eps.length > 0) {
+          eps.forEach((ep) => {
+            const opt = document.createElement('option');
+            opt.value = ep.episode;
+            const label = ep.title ? `Ep ${ep.episode} — ${ep.title}` : `Episódio ${ep.episode}`;
+            opt.textContent = label;
+            selEpisodeDropdown.appendChild(opt);
+          });
+        } else {
+          for (let i = 1; i <= 25; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = `Episódio ${i}`;
+            selEpisodeDropdown.appendChild(opt);
+          }
+        }
+      };
+
+      const targetSeason = (options && options.autoSeason) || (quickInputSeason ? parseInt(quickInputSeason.value, 10) : 1) || (activeSeries ? activeSeries.season : 1);
+      if (seasons.includes(Number(targetSeason))) {
+        selSeasonDropdown.value = targetSeason;
+      }
+      populateEpisodes(selSeasonDropdown.value);
+
+      const targetEpisode = (options && options.autoEpisode) || (quickInputEpisode ? parseInt(quickInputEpisode.value, 10) : 1) || (activeSeries ? activeSeries.currentEpisode : 1);
+      selEpisodeDropdown.value = targetEpisode;
+
+      selSeasonDropdown.onchange = () => {
+        populateEpisodes(selSeasonDropdown.value);
+        if (quickInputSeason) quickInputSeason.value = selSeasonDropdown.value;
+      };
+    }
+
+    // Busca legendas automaticamente para o episódio selecionado
+    executeSubtitleSearch({
+      query: currentSelectedShow.name || item.name,
+      imdbId: currentSelectedShow.id || item.id,
+      season: isSeries ? parseInt(selSeasonDropdown.value, 10) : undefined,
+      episode: isSeries ? parseInt(selEpisodeDropdown.value, 10) : undefined,
+      aliases: currentSelectedShow.aliases || [],
+    });
+  };
+
+  // Executa busca no catálogo Cinemeta
+  const executeCatalogSearch = async (query, autoSelectOptions = null) => {
+    const q = (query || '').trim();
+    if (!q) {
+      catalogResultsBox.hidden = true;
+      catalogResultsBox.innerHTML = '';
+      return;
+    }
+
+    catalogClearBtn.hidden = false;
+    catalogResultsBox.hidden = false;
+    catalogResultsBox.innerHTML = '<div style="padding:10px; text-align:center; color:rgba(255,255,255,0.6); font-size:12px;">Buscando obras no catálogo...</div>';
+
+    try {
+      const metas = await window.api.searchCatalog(q);
+      if (!metas || metas.length === 0) {
+        catalogResultsBox.innerHTML = '<div style="padding:10px; text-align:center; color:rgba(255,255,255,0.4); font-size:11.5px;">Nenhuma obra encontrada no catálogo. Tente outro nome ou use a busca manual abaixo.</div>';
+        return;
+      }
+
+      catalogResultsBox.innerHTML = '';
+      metas.forEach((m) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'ov-catalog-item';
+        itemEl.innerHTML = `
+          ${m.poster ? `<img class="ov-catalog-poster" src="${escapeHtml(m.poster)}" onerror="this.style.display='none'" />` : '<div class="ov-catalog-poster" style="display:flex;align-items:center;justify-content:center;font-size:9px;color:#94a3b8;">SEM POSTER</div>'}
+          <div class="ov-catalog-info">
+            <div class="ov-catalog-title">${escapeHtml(m.name)}</div>
+            ${m.altName ? `<div style="font-size:11px; color:#38bdf8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;">${escapeHtml(m.altName)}</div>` : ''}
+            <div class="ov-catalog-meta">
+              <span>${m.year || ''}</span>
+              <span class="ov-catalog-tag">${m.type === 'series' ? 'Série' : 'Filme'}</span>
+            </div>
+          </div>
+          <button type="button" class="ov-catalog-pick-btn">Selecionar</button>
+        `;
+        itemEl.addEventListener('click', () => {
+          const autoSeason = quickInputSeason ? parseInt(quickInputSeason.value, 10) : (autoSelectOptions && autoSelectOptions.autoSeason);
+          const autoEpisode = quickInputEpisode ? parseInt(quickInputEpisode.value, 10) : (autoSelectOptions && autoSelectOptions.autoEpisode);
+          selectShow(m, { ...(autoSelectOptions || {}), autoSeason, autoEpisode });
+        });
+        catalogResultsBox.appendChild(itemEl);
+      });
+
+      if (autoSelectOptions && autoSelectOptions.selectImdbId) {
+        const match = metas.find((m) => m.id === autoSelectOptions.selectImdbId);
+        if (match) {
+          selectShow(match, autoSelectOptions);
+        }
+      }
+    } catch (err) {
+      catalogResultsBox.innerHTML = `<div style="padding:10px; text-align:center; color:#f87171; font-size:11.5px;">Erro no catálogo: ${escapeHtml(err.message)}</div>`;
+    }
+  };
+
+  btnCatalogSearch.addEventListener('click', () => {
+    const s = quickInputSeason ? parseInt(quickInputSeason.value, 10) || 1 : 1;
+    const e = quickInputEpisode ? parseInt(quickInputEpisode.value, 10) || 1 : 1;
+    executeCatalogSearch(catalogInput.value, { autoSeason: s, autoEpisode: e });
+  });
+
+  let debounceTimer = null;
+  catalogInput.addEventListener('input', () => {
+    catalogClearBtn.hidden = !catalogInput.value;
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const s = quickInputSeason ? parseInt(quickInputSeason.value, 10) || 1 : 1;
+      const e = quickInputEpisode ? parseInt(quickInputEpisode.value, 10) || 1 : 1;
+      executeCatalogSearch(catalogInput.value, { autoSeason: s, autoEpisode: e });
+    }, 380);
+  });
+
+  catalogInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      clearTimeout(debounceTimer);
+      const s = quickInputSeason ? parseInt(quickInputSeason.value, 10) || 1 : 1;
+      const e = quickInputEpisode ? parseInt(quickInputEpisode.value, 10) || 1 : 1;
+      executeCatalogSearch(catalogInput.value, { autoSeason: s, autoEpisode: e });
+    }
+  });
+
+  btnFetchSubtitles.addEventListener('click', () => {
+    if (!currentSelectedShow) return;
+    const isSeries = (currentSelectedShow.type) === 'series';
+    executeSubtitleSearch({
+      query: currentSelectedShow.name,
+      imdbId: currentSelectedShow.id,
+      season: isSeries ? parseInt(selSeasonDropdown.value, 10) : undefined,
+      episode: isSeries ? parseInt(selEpisodeDropdown.value, 10) : undefined,
+      aliases: currentSelectedShow.aliases || [],
+    });
+  });
+
+  if (selEpisodeDropdown) {
+    selEpisodeDropdown.addEventListener('change', () => {
+      if (quickInputEpisode) quickInputEpisode.value = selEpisodeDropdown.value;
+      if (!currentSelectedShow) return;
+      executeSubtitleSearch({
+        query: currentSelectedShow.name,
+        imdbId: currentSelectedShow.id,
+        season: parseInt(selSeasonDropdown.value, 10),
+        episode: parseInt(selEpisodeDropdown.value, 10),
+        aliases: currentSelectedShow.aliases || [],
+      });
+    });
+  }
+
+  if (quickInputSeason) {
+    quickInputSeason.addEventListener('change', () => {
+      if (selSeasonDropdown) {
+        selSeasonDropdown.value = quickInputSeason.value;
+      }
+    });
+  }
+
+  if (quickInputEpisode) {
+    quickInputEpisode.addEventListener('change', () => {
+      if (selEpisodeDropdown) {
+        selEpisodeDropdown.value = quickInputEpisode.value;
+      }
+    });
+  }
+
+  // Séries recentes
+  modalBodyEl.querySelectorAll('.ov-sub-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const title = chip.getAttribute('data-title');
+      const season = parseInt(chip.getAttribute('data-season'), 10) || 1;
+      const episode = parseInt(chip.getAttribute('data-episode'), 10) || 1;
+      const imdbId = chip.getAttribute('data-imdb') || null;
+
+      catalogInput.value = title;
+      if (quickInputSeason) quickInputSeason.value = season;
+      if (quickInputEpisode) quickInputEpisode.value = episode;
+      catalogClearBtn.hidden = false;
+      executeCatalogSearch(title, { selectImdbId: imdbId, autoSeason: season, autoEpisode: episode });
+    });
+  });
+
+  // Busca manual avulsa
+  if (btnManualSearch) {
+    btnManualSearch.addEventListener('click', () => {
+      const title = manualInputTitle.value.trim();
+      if (!title) return;
+      const season = parseInt(manualInputSeason.value, 10) || 1;
+      const episode = parseInt(manualInputEpisode.value, 10) || 1;
+      executeSubtitleSearch({
+        query: title,
+        season,
+        episode,
+      });
+    });
+  }
+
+  // Auto busca inicial se tiver título candidato
+  if (candidateTitle) {
+    const opts = {
+      selectImdbId: detected.imdbId || (activeSeries ? activeSeries.imdbId : null),
+      autoSeason: detected.season,
+      autoEpisode: detected.episode,
+    };
+    executeCatalogSearch(candidateTitle, opts);
+  }
+}
+
+// --- Card de Próximo Episódio ---
+const nextEpCard = document.getElementById('ov-next-ep-card');
+const nextEpTitle = document.getElementById('ov-next-ep-title');
+const btnNextEpDownload = document.getElementById('btn-next-ep-download');
+const btnNextEpDismiss = document.getElementById('btn-next-ep-dismiss');
+let pendingNextEp = null;
+
+if (btnNextEpDismiss) {
+  btnNextEpDismiss.addEventListener('click', () => {
+    if (nextEpCard) nextEpCard.hidden = true;
+    pendingNextEp = null;
+  });
+}
+
+if (btnNextEpDownload) {
+  btnNextEpDownload.addEventListener('click', async () => {
+    if (!pendingNextEp) return;
+    btnNextEpDownload.disabled = true;
+    btnNextEpDownload.textContent = 'Buscando...';
+    try {
+      const results = await window.api.searchSubtitles({
+        query: pendingNextEp.title,
+        imdbId: pendingNextEp.imdbId,
+        season: pendingNextEp.season,
+        episode: pendingNextEp.currentEpisode,
+      });
+      if (results && results.length > 0) {
+        results.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+        const best = results[0];
+        await window.api.downloadAndApplySubtitle({
+          provider: best.provider,
+          downloadPayload: best.downloadPayload,
+          seriesTitle: pendingNextEp.title,
+          season: pendingNextEp.season,
+          episode: pendingNextEp.currentEpisode,
+        });
+        showToast(`Legenda aplicada: ${pendingNextEp.title} Ep ${pendingNextEp.currentEpisode}`);
+      } else {
+        showToast(`Nenhuma legenda encontrada para o Ep ${pendingNextEp.currentEpisode}`);
+      }
+    } catch (err) {
+      showToast('Erro ao baixar legenda: ' + err.message);
+    } finally {
+      if (nextEpCard) nextEpCard.hidden = true;
+      btnNextEpDownload.disabled = false;
+      btnNextEpDownload.textContent = 'Baixar Legenda';
+      pendingNextEp = null;
+    }
+  });
+}
+
+window.api.onSubtitlesAutoApplied((info) => {
+  if (!info || !info.series) return;
+  const cachedTxt = info.cached ? ' (do cache local)' : '';
+  showToast(`💬 ${info.series.title} Ep ${info.series.currentEpisode}: Legenda PT-BR aplicada${cachedTxt}`);
+});
+
+window.api.onNextEpisodePrompt((info) => {
+  if (!info || !info.series || !nextEpCard) return;
+  pendingNextEp = info.series;
+  if (nextEpTitle) nextEpTitle.textContent = `${info.series.title} — Ep ${info.series.currentEpisode}`;
+  nextEpCard.hidden = false;
+});
+
+// --- Pular Abertura (SkipDB) ---
+const skipContainer = document.getElementById('ov-skip-container');
+const btnSkipIntro = document.getElementById('btn-skip-intro');
+const skipBtnLabel = document.getElementById('skip-btn-label');
+let currentSkipSegments = null;
+let introAutoSkipped = false;
+let autoSkipIntroConfig = false;
+
+window.api.getSettings().then((s) => {
+  autoSkipIntroConfig = s.skipIntroAuto === true;
+}).catch(() => {});
+
+window.api.onSkipIntroSettingsChanged((cfg) => {
+  if (cfg) autoSkipIntroConfig = cfg.skipIntroAuto === true;
+});
+
+window.api.onSkipSegments((data) => {
+  currentSkipSegments = data;
+  introAutoSkipped = false;
+  renderSkipSegmentsOnTrack();
+});
+
+function renderSkipSegmentsOnTrack() {
+  if (!progressSegments) return;
+  progressSegments.innerHTML = '';
+  if (!currentSkipSegments || !duration || duration <= 0) return;
+  const segs = [
+    { seg: currentSkipSegments.recap, type: 'recap' },
+    { seg: currentSkipSegments.intro, type: 'intro' },
+    { seg: currentSkipSegments.outro, type: 'outro' },
+  ];
+  segs.forEach(({ seg, type }) => {
+    if (!seg || typeof seg.start !== 'number' || typeof seg.end !== 'number') return;
+    const startSec = Math.max(0, seg.start);
+    const endSec = Math.min(duration, seg.end);
+    if (endSec <= startSec) return;
+    const leftPct = (startSec / duration) * 100;
+    const widthPct = Math.max(0.4, ((endSec - startSec) / duration) * 100);
+    const el = document.createElement('div');
+    el.className = `ov-progress-segment ov-progress-segment-${type}`;
+    el.style.left = `${leftPct}%`;
+    el.style.width = `${widthPct}%`;
+    progressSegments.appendChild(el);
+  });
+}
+
+function getActiveSkipSegment(pos) {
+  if (!currentSkipSegments) return null;
+  const intro = currentSkipSegments.intro;
+  const recap = currentSkipSegments.recap;
+  const outro = currentSkipSegments.outro;
+
+  if (intro && pos >= intro.start && pos < intro.end) {
+    return { type: 'intro', label: 'Pular Abertura', end: intro.end };
+  }
+  if (recap && pos >= recap.start && pos < recap.end) {
+    return { type: 'recap', label: 'Pular Recapitulação', end: recap.end };
+  }
+  if (outro && pos >= outro.start && pos < outro.end) {
+    return { type: 'outro', label: 'Pular Encerramento', end: outro.end };
+  }
+  return null;
+}
+
+function checkSkipSegments(pos) {
+  if (!skipContainer) return;
+  const activeSeg = getActiveSkipSegment(pos);
+  if (!activeSeg) {
+    skipContainer.hidden = true;
+    return;
+  }
+
+  // Se configurado para pular abertura automaticamente e ainda não pulou nesta abertura
+  if (activeSeg.type === 'intro' && autoSkipIntroConfig && !introAutoSkipped) {
+    introAutoSkipped = true;
+    skipContainer.hidden = true;
+    window.api.seekAbsolute(activeSeg.end).catch(() => {});
+    showToast('⏭ Abertura pulada automaticamente (SkipDB)');
+    return;
+  }
+
+  if (skipBtnLabel) {
+    skipBtnLabel.textContent = activeSeg.label;
+  }
+  skipContainer.hidden = false;
+}
+
+function executeSkipSegment() {
+  const activeSeg = getActiveSkipSegment(position);
+  if (activeSeg) {
+    window.api.seekAbsolute(activeSeg.end).catch(() => {});
+    if (skipContainer) skipContainer.hidden = true;
+    showToast(`⏭ ${activeSeg.label.replace('Pular ', '')} pulada`);
+  }
+}
+
+if (btnSkipIntro) {
+  btnSkipIntro.addEventListener('click', executeSkipSegment);
+}
+
+// --- Smart Series Bar (Banner Inteligente no Topo) ---
+const smartBanner = document.getElementById('ov-smart-banner');
+const smartBannerContent = document.getElementById('ov-smart-banner-content');
+let smartBannerDismissTimer = null;
+
+function dismissSmartBanner() {
+  clearTimeout(smartBannerDismissTimer);
+  if (!smartBanner || smartBanner.hidden) return;
+  smartBanner.classList.add('dismissing');
+  setTimeout(() => {
+    smartBanner.hidden = true;
+    smartBanner.classList.remove('dismissing');
+    if (smartBannerContent) smartBannerContent.innerHTML = '';
+  }, 220);
+}
+
+function showSmartBanner(html, autoDismissMs = 12000) {
+  clearTimeout(smartBannerDismissTimer);
+  if (!smartBanner || !smartBannerContent) return;
+  smartBannerContent.innerHTML = html;
+  smartBanner.classList.remove('dismissing');
+  smartBanner.hidden = false;
+
+  let remaining = autoDismissMs;
+  let startTime = Date.now();
+
+  const startTimer = (ms) => {
+    clearTimeout(smartBannerDismissTimer);
+    if (ms > 0) {
+      smartBannerDismissTimer = setTimeout(() => {
+        dismissSmartBanner();
+      }, ms);
+    }
+  };
+
+  // Pausa o auto-dismiss se o mouse passar por cima para não sumir enquanto o usuário vai clicar
+  smartBanner.onmouseenter = () => {
+    clearTimeout(smartBannerDismissTimer);
+    remaining -= (Date.now() - startTime);
+  };
+  smartBanner.onmouseleave = () => {
+    startTime = Date.now();
+    startTimer(Math.max(3000, remaining));
+  };
+
+  startTimer(autoDismissMs);
+}
+
+// Quando o usuário muda para o próximo episódio na mesma sessão
+window.api.onEpisodeAdvanced((data) => {
+  const series = data?.series;
+  if (!series || !series.title) return;
+
+  const appliedSubtitle = !!data.appliedSubtitle;
+  const sTitle = escapeHtml(series.title);
+  const sEp = `T${series.season || 1} Ep ${series.currentEpisode || 1}`;
+
+  const html = `
+    <div class="ov-smart-pill">
+      <span class="ov-smart-pill-icon">📺</span>
+      <span class="ov-smart-pill-text">
+        Você mudou para: <strong>${sTitle}</strong> — ${sEp}
+      </span>
+      ${appliedSubtitle ? '<span class="ov-smart-pill-tag">Legenda PT-BR ✓</span>' : ''}
+      <button type="button" class="ov-smart-btn-confirm" id="btn-smart-ok" title="Confirmar">✓ Ok</button>
+      <button type="button" class="ov-smart-btn-undo" id="btn-smart-undo" title="Desvincular e remover legenda caso seja outro conteúdo">Não é esse</button>
+      <button type="button" class="ov-smart-btn-close" id="btn-smart-close" aria-label="Fechar">✕</button>
+    </div>
+  `;
+
+  showSmartBanner(html, 14000);
+
+  const btnOk = document.getElementById('btn-smart-ok');
+  const btnUndo = document.getElementById('btn-smart-undo');
+  const btnClose = document.getElementById('btn-smart-close');
+
+  if (btnOk) {
+    btnOk.addEventListener('click', () => {
+      dismissSmartBanner();
+    });
+  }
+
+  if (btnClose) {
+    btnClose.addEventListener('click', () => {
+      dismissSmartBanner();
+    });
+  }
+
+  if (btnUndo) {
+    btnUndo.addEventListener('click', async () => {
+      btnUndo.disabled = true;
+      btnUndo.style.opacity = '0.6';
+      try {
+        await window.api.notThisSeries();
+        showToast('Desvinculado: legenda e histórico revertidos');
+      } catch (err) {
+        showToast(`Erro ao desvincular: ${err.message}`);
+      }
+      dismissSmartBanner();
+    });
+  }
+});
+
+// Sugestão de vinculação rápida no topo no início do vídeo se há séries recentes
+window.api.onDlnaIdentifyPrompt((data) => {
+  const recents = data?.recentSeries || [];
+  if (!recents.length) return;
+
+  const chipsHtml = recents.slice(0, 3).map((s, idx) => `
+    <button type="button" class="ov-smart-chip" data-idx="${idx}">
+      ${escapeHtml(s.title)} · T${s.season} Ep ${s.suggestedEpisode}
+    </button>
+  `).join('');
+
+  const html = `
+    <div class="ov-smart-card">
+      <div class="ov-smart-card-header">
+        <div class="ov-smart-card-title">
+          <span>📺</span>
+          <span>Transmissão detectada. Continuar assistindo?</span>
+        </div>
+        <button type="button" class="ov-smart-btn-close" id="btn-smart-identify-close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="ov-smart-chips-row">
+        ${chipsHtml}
+        <button type="button" class="ov-smart-chip ov-smart-chip-search" id="btn-smart-search">
+          🔍 Outra série / Buscar...
+        </button>
+      </div>
+    </div>
+  `;
+
+  showSmartBanner(html, 14000);
+
+  const btnClose = document.getElementById('btn-smart-identify-close');
+  if (btnClose) {
+    btnClose.addEventListener('click', () => {
+      dismissSmartBanner();
+    });
+  }
+
+  const btnSearch = document.getElementById('btn-smart-search');
+  if (btnSearch) {
+    btnSearch.addEventListener('click', () => {
+      dismissSmartBanner();
+      openSubtitlesModal(true);
+    });
+  }
+
+  const chips = smartBannerContent ? smartBannerContent.querySelectorAll('.ov-smart-chip[data-idx]') : [];
+  chips.forEach((chip) => {
+    chip.addEventListener('click', async () => {
+      const idx = parseInt(chip.getAttribute('data-idx'), 10);
+      const s = recents[idx];
+      if (!s) return;
+
+      chip.disabled = true;
+      chip.style.opacity = '0.6';
+
+      try {
+        const res = await window.api.bindAndApply({
+          title: s.title,
+          season: s.season,
+          episode: s.suggestedEpisode,
+          imdbId: s.imdbId,
+        });
+        dismissSmartBanner();
+        showToast(`📺 ${s.title} Ep ${s.suggestedEpisode} vinculado`);
+        if (res?.subResult?.applied) {
+          const cachedTxt = res.subResult.cached ? ' (do cache)' : '';
+          showToast(`💬 Legenda PT-BR aplicada${cachedTxt}`);
+        }
+      } catch (err) {
+        dismissSmartBanner();
+        showToast(`Erro ao vincular: ${err.message}`);
+      }
+    });
+  });
+});
+
+window.api.onSubtitlesAutoApplied((info) => {
+  if (smartBanner && !smartBanner.hidden) return;
+  const cachedTxt = info?.cached ? ' (do cache)' : '';
+  showToast(`💬 Legenda PT-BR aplicada automaticamente${cachedTxt}`);
+});
+
 function updateQualityInfo(info) {
   if (!info || info.idle || !info.videoWidth || !info.videoHeight) {
     qualityInfoEl.hidden = true;
@@ -710,7 +2013,19 @@ function updateQualityInfo(info) {
   qualityInfoEl.hidden = false;
 }
 
+function isTypingTarget(el) {
+  return el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+}
+
 document.addEventListener('keydown', (e) => {
+  if (isTypingTarget(document.activeElement)) {
+    if (e.key === 'Escape') {
+      if (modalOpen) closeModal();
+      else document.activeElement.blur();
+    }
+    return;
+  }
+
   if (e.ctrlKey && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
     e.preventDefault();
     toggleDebugOverlay();
@@ -719,46 +2034,64 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (modalOpen) closeModal();
     else if (openDropdownId) closeDropdowns();
+    else {
+      window.api.toggleFullscreen().catch(() => {});
+    }
     return;
   }
-  if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    if (!btnSkipIntro.hidden && autoSkipIntro && !autoSkipCancelledForCurrentMedia && (position || 0) < (detectedIntro?.startTime || 0)) {
-      autoSkipCancelledForCurrentMedia = true;
-      if (ovSkipRing) ovSkipRing.hidden = true;
-      if (ovSkipText) ovSkipText.textContent = 'Pular Abertura';
-      if (ovSkipCancelHint) ovSkipCancelHint.hidden = true;
-      if (ovSkipKey) ovSkipKey.hidden = false;
-      showToast('⚡ Auto-skip cancelado (Abertura mantida)');
+  if (e.key === ' ' || e.key === 'Spacebar') {
+    e.preventDefault();
+    window.api.togglePlayPause().catch(() => {});
+    return;
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    window.api.seek(-10).catch(() => {});
+    return;
+  }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    window.api.seek(10).catch(() => {});
+    return;
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const currentVol = volumeEl ? Number(volumeEl.value) : 100;
+    const nextVol = Math.min(150, currentVol + 5);
+    if (volumeEl) volumeEl.value = nextVol;
+    window.api.setVolume(nextVol).catch(() => {});
+    return;
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const currentVol = volumeEl ? Number(volumeEl.value) : 100;
+    const nextVol = Math.max(0, currentVol - 5);
+    if (volumeEl) volumeEl.value = nextVol;
+    window.api.setVolume(nextVol).catch(() => {});
+    return;
+  }
+  if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    window.api.toggleMute().catch(() => {});
+    return;
+  }
+  if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    window.api.toggleFullscreen().catch(() => {});
+    return;
+  }
+  if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (skipContainer && !skipContainer.hidden) {
+      e.preventDefault();
+      executeSkipSegment();
       return;
     }
+  }
+  if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    window.api.toggleSubtitles().catch(() => {});
+    return;
   }
   if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.altKey && !e.metaKey) {
     window.api.togglePip().catch(() => {});
     return;
-  }
-  if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    skipIntroAction();
-    return;
-  }
-  if ((e.key === 'i' || e.key === 'I') && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    if (introHud && !introHud.hidden) {
-      window.api.markIntroStart().then((pos) => {
-        markedStartSec = pos;
-        updateIntroHudUI();
-        showToast(`Início marcado: ${formatClock(pos)}`);
-      });
-      return;
-    }
-  }
-  if ((e.key === 'o' || e.key === 'O') && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    if (introHud && !introHud.hidden) {
-      window.api.markIntroEnd().then((pos) => {
-        markedEndSec = pos;
-        updateIntroHudUI();
-        showToast(`Fim marcado: ${formatClock(pos)}`);
-      });
-      return;
-    }
   }
   if ((e.key === 'a' || e.key === 'A') && !e.ctrlKey && !e.altKey && !e.metaKey) {
     if (fitModes && fitModes.length > 0) {
@@ -795,7 +2128,13 @@ function renderProgress(pct) {
 function showTooltip(pct, clientX) {
   if (!duration) return;
   const rect = progressHit.getBoundingClientRect();
-  tooltipEl.textContent = formatClock(pct * duration);
+  const hoverSec = pct * duration;
+  let text = formatClock(hoverSec);
+  const activeSeg = getActiveSkipSegment(hoverSec);
+  if (activeSeg) {
+    text += ` · ${activeSeg.label.replace('Pular ', '')}`;
+  }
+  tooltipEl.textContent = text;
   tooltipEl.style.left = `${Math.min(rect.width, Math.max(0, clientX - rect.left))}px`;
   tooltipEl.classList.add('visible');
 }
@@ -873,12 +2212,32 @@ window.api.onCastSource(({ remote, title } = {}) => {
   castSourceEl.textContent = `Recebendo de ${remote}`;
 });
 
-window.api.onNowPlaying(({ target }) => {
+function isGarbageTitle(str) {
+  if (!str || typeof str !== 'string') return true;
+  const s = str.trim();
+  if (!s || s.length < 2) return true;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/[?&=]/.test(s)) return true;
+  if (/content_auth|content_license|_media\.mp4/i.test(s)) return true;
+  if (/^[a-f0-9_\-]{20,}$/i.test(s)) return true;
+  if (/^[a-f0-9]{32}/i.test(s)) return true;
+  if (/^dlna-video$/i.test(s)) return true;
+  return false;
+}
+
+window.api.onNowPlaying(({ target, title: cleanTitle } = {}) => {
   currentTargetUrl = target || null;
+  currentSkipSegments = null;
+  if (progressSegments) progressSegments.innerHTML = '';
   if (pendingCastTitle) {
     nowPlayingTitle.textContent = pendingCastTitle;
     nowPlayingTitle.title = target;
     pendingCastTitle = null;
+    return;
+  }
+  if (cleanTitle) {
+    nowPlayingTitle.textContent = cleanTitle;
+    nowPlayingTitle.title = target;
     return;
   }
   let title = target;
@@ -889,6 +2248,9 @@ window.api.onNowPlaying(({ target }) => {
   } catch {
     const parts = target.split(/[\\/]/);
     title = parts[parts.length - 1] || target;
+  }
+  if (isGarbageTitle(title)) {
+    title = 'Transmissão YouCine (DLNA)';
   }
   nowPlayingTitle.textContent = title;
   nowPlayingTitle.title = target;
@@ -931,7 +2293,11 @@ window.api.onPlayerStatus((info) => {
     bufferingEl.className = 'ov-buffering';
   }
 
+  const prevDuration = duration;
   duration = info.duration || 0;
+  if (duration !== prevDuration && duration > 0) {
+    renderSkipSegmentsOnTrack();
+  }
   if (info.isLive) {
     ovRoot.classList.add('ov-live');
     if (info.dvrMode) {
@@ -968,6 +2334,7 @@ window.api.onPlayerStatus((info) => {
     position = info.position || 0;
     renderProgress(duration ? position / duration : 0);
     timeCurrentEl.textContent = formatClock(position);
+    checkSkipSegments(position);
   }
   if (!info.isLive && duration > 0) {
     const cacheSecs = typeof info.cacheTime === 'number' ? info.cacheTime : 0;
@@ -979,6 +2346,7 @@ window.api.onPlayerStatus((info) => {
   }
   timeDurationEl.textContent = formatClock(duration);
   lastSubVisible = !!info.subVisible;
+  btnSubtitleMenu.classList.toggle('ov-btn-active', lastSubVisible);
 
   const wasPaused = lastPaused;
   lastPaused = !!info.paused;
@@ -996,167 +2364,7 @@ window.api.onPlayerStatus((info) => {
   if (!scrubbing && document.activeElement !== volumeEl) {
     volumeEl.value = info.volume ?? volumeEl.value;
   }
-
-  // Verificação e exibição do botão Pular Abertura (aparece 5s antes do início e some no final ou ao pular)
-  if (detectedIntro && !info.isLive && duration > 0) {
-    const pos = info.position || 0;
-    const startWindow = Math.max(0, detectedIntro.startTime - 5);
-    const endWindow = detectedIntro.endTime;
-
-    if (pos >= startWindow && pos < endWindow) {
-      btnSkipIntro.hidden = false;
-
-      // Contagem regressiva se autoSkipIntro estiver ativo e o usuário estiver nos 5s antes do início
-      if (autoSkipIntro && !autoSkipCancelledForCurrentMedia && pos < detectedIntro.startTime) {
-        const remainingSec = Math.max(0, detectedIntro.startTime - pos);
-        const progressPct = Math.min(1, Math.max(0, (5 - remainingSec) / 5)); // 0.0 a 1.0
-        const circumference = 81.68;
-        if (ovSkipRing) ovSkipRing.hidden = false;
-        if (ovSkipRingBar) ovSkipRingBar.style.strokeDashoffset = String(circumference * (1 - progressPct));
-        if (ovSkipText) ovSkipText.textContent = `Pular em ${Math.ceil(remainingSec)}s`;
-        if (ovSkipCancelHint) ovSkipCancelHint.hidden = false;
-        if (ovSkipKey) ovSkipKey.hidden = true;
-      } else {
-        if (ovSkipRing) ovSkipRing.hidden = true;
-        if (ovSkipText) ovSkipText.textContent = 'Pular Abertura';
-        if (ovSkipCancelHint) ovSkipCancelHint.hidden = true;
-        if (ovSkipKey) ovSkipKey.hidden = false;
-      }
-
-      // Disparo do pulo automático ao atingir o início exato da abertura
-      if (autoSkipIntro && !hasAutoSkipped && !autoSkipCancelledForCurrentMedia && pos >= detectedIntro.startTime) {
-        hasAutoSkipped = true;
-        skipIntroAction();
-      }
-    } else {
-      btnSkipIntro.hidden = true;
-    }
-  } else {
-    btnSkipIntro.hidden = true;
-  }
 });
-
-// --- Sistema de Reconhecimento e Pular Aberturas ---
-window.api.getAutoSkipIntro().then(v => { autoSkipIntro = !!v; }).catch(() => {});
-window.api.onAutoSkipIntroChanged(v => { autoSkipIntro = !!v; });
-
-function updateIntroMarker(info) {
-  detectedIntro = info;
-  hasAutoSkipped = false;
-  autoSkipCancelledForCurrentMedia = false;
-  if (info && typeof info.startTime === 'number' && duration > 0) {
-    const leftPct = (info.startTime / duration) * 100;
-    const widthPct = Math.max(1, ((info.endTime - info.startTime) / duration) * 100);
-    progressIntro.style.left = leftPct + '%';
-    progressIntro.style.width = widthPct + '%';
-    progressIntro.hidden = false;
-  } else {
-    progressIntro.hidden = true;
-    btnSkipIntro.hidden = true;
-  }
-}
-
-window.api.getIntroDetected().then(info => updateIntroMarker(info)).catch(() => {});
-window.api.onIntroDetected(info => updateIntroMarker(info));
-
-if (window.api.onIntroDiffDetected) {
-  window.api.onIntroDiffDetected((data) => {
-    showToast(`🎵 Abertura diferente de "${data?.recentTitle || 'Salva'}"? Abra o menu (...) para marcar a OP 2.`);
-  });
-}
-
-function skipIntroAction() {
-  if (ovSeekFlash) {
-    ovSeekFlash.classList.add('active');
-    setTimeout(() => ovSeekFlash.classList.remove('active'), 180);
-  }
-  if (detectedIntro && typeof detectedIntro.endTime === 'number') {
-    const currentPos = position || 0;
-    const seekDelta = detectedIntro.endTime - currentPos;
-    if (seekDelta > 0) {
-      window.api.seek(seekDelta).catch(() => {});
-    }
-    btnSkipIntro.hidden = true;
-    showToast(`⚡ Abertura pulada (${Math.round(detectedIntro.duration || seekDelta)}s)`);
-  } else {
-    window.api.seek(85).catch(() => {});
-    showToast('⚡ Pulou 85s (Abertura)');
-  }
-}
-
-if (btnSkipIntro) {
-  btnSkipIntro.addEventListener('click', (e) => {
-    e.stopPropagation();
-    skipIntroAction();
-  });
-}
-
-if (btnCloseIntroHud) {
-  btnCloseIntroHud.addEventListener('click', () => {
-    introHud.hidden = true;
-  });
-}
-
-function updateIntroHudUI() {
-  if (markedStartSec !== null) {
-    lblIntroStart.textContent = formatClock(markedStartSec);
-    btnMarkStart.classList.add('marked');
-  } else {
-    lblIntroStart.textContent = '--:--';
-    btnMarkStart.classList.remove('marked');
-  }
-  if (markedEndSec !== null) {
-    lblIntroEnd.textContent = formatClock(markedEndSec);
-    btnMarkEnd.classList.add('marked');
-  } else {
-    lblIntroEnd.textContent = '--:--';
-    btnMarkEnd.classList.remove('marked');
-  }
-  if (markedStartSec !== null && markedEndSec !== null && markedEndSec > markedStartSec) {
-    btnSaveIntro.disabled = false;
-    const dur = Math.round(markedEndSec - markedStartSec);
-    btnSaveIntro.textContent = `💾 Salvar Assinatura (${dur}s)`;
-  } else {
-    btnSaveIntro.disabled = true;
-    btnSaveIntro.textContent = '💾 Salvar & Extrair Assinatura';
-  }
-}
-
-if (btnMarkStart) {
-  btnMarkStart.addEventListener('click', async () => {
-    const pos = await window.api.markIntroStart();
-    markedStartSec = pos;
-    updateIntroHudUI();
-    showToast(`Início marcado: ${formatClock(pos)}`);
-  });
-}
-
-if (btnMarkEnd) {
-  btnMarkEnd.addEventListener('click', async () => {
-    const pos = await window.api.markIntroEnd();
-    markedEndSec = pos;
-    updateIntroHudUI();
-    showToast(`Fim marcado: ${formatClock(pos)}`);
-  });
-}
-
-if (btnSaveIntro) {
-  btnSaveIntro.addEventListener('click', async () => {
-    btnSaveIntro.disabled = true;
-    btnSaveIntro.textContent = 'Extraindo áudio da abertura...';
-    try {
-      await window.api.saveIntroProfile();
-      showToast('✅ Assinatura de áudio aprendida para os próximos episódios!');
-      introHud.hidden = true;
-      markedStartSec = null;
-      markedEndSec = null;
-      updateIntroHudUI();
-    } catch (err) {
-      showToast(`Erro: ${err.message}`);
-      updateIntroHudUI();
-    }
-  });
-}
 
 // --- Mostrar/esconder controles automaticamente ---
 let idleTimer = null;
@@ -1308,9 +2516,8 @@ window.api.onPlayerTracks((tracksInfo) => {
   renderAudioMenu();
 
   subtitleTracks = tracksInfo.sub || [];
-  const subtitleHidden = subtitleTracks.length === 0;
-  subtitleWrap.hidden = subtitleHidden;
-  if (!subtitleHidden) renderSubtitleMenu();
+  subtitleWrap.hidden = false; // Sempre disponível para seleção de faixas ou carregamento externo
+  renderSubtitleMenu();
 });
 
 function renderQualityMenu() {
@@ -1341,3 +2548,18 @@ function renderQualityMenu() {
     qualityMenu.appendChild(el);
   });
 }
+
+// Previne que cliques na barra de controle tragam a barra de tarefas do Windows à frente.
+// Mantém a janela principal (mainWindow) como a janela de primeiro plano em foco,
+// exceto quando o usuário estiver interagindo com modais ou campos de texto (input/select/textarea).
+document.addEventListener('pointerdown', (e) => {
+  if (
+    !e.target.closest('#ov-modal') &&
+    !e.target.closest('input, select, textarea, [contenteditable="true"]')
+  ) {
+    if (window.api && window.api.focusMainWindow) {
+      window.api.focusMainWindow().catch(() => {});
+    }
+  }
+}, { passive: true });
+

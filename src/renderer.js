@@ -145,6 +145,19 @@ const navNowPlaying = document.getElementById('nav-now-playing');
 const homeNowPlaying = document.getElementById('home-now-playing');
 const homeNowPlayingTitle = document.getElementById('home-now-playing-title');
 
+function isGarbageTitle(str) {
+  if (!str || typeof str !== 'string') return true;
+  const s = str.trim();
+  if (!s || s.length < 2) return true;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/[?&=]/.test(s)) return true;
+  if (/content_auth|content_license|_media\.mp4/i.test(s)) return true;
+  if (/^[a-f0-9_\-]{20,}$/i.test(s)) return true;
+  if (/^[a-f0-9]{32}/i.test(s)) return true;
+  if (/^dlna-video$/i.test(s)) return true;
+  return false;
+}
+
 function displayNameFor(target) {
   if (!target) return target;
   const clean = target.split('?')[0];
@@ -152,13 +165,15 @@ function displayNameFor(target) {
   return parts[parts.length - 1] || target;
 }
 
-window.api.onNowPlaying(({ target } = {}) => {
+window.api.onNowPlaying(({ target, title } = {}) => {
   activateTab('player');
   navNowPlaying.hidden = false;
   autoAdvanceTriggered = false;
   if (target) {
     homeNowPlaying.hidden = false;
-    homeNowPlayingTitle.textContent = displayNameFor(target);
+    const base = displayNameFor(target);
+    const cleanTitle = title || (isGarbageTitle(base) ? 'Transmissão YouCine (DLNA)' : base);
+    homeNowPlayingTitle.textContent = cleanTitle;
     homeNowPlayingTitle.title = target;
   }
 });
@@ -531,72 +546,6 @@ window.api.onAudioPresetChanged((v) => {
   if (audioPresetSelect && v) audioPresetSelect.value = v;
 });
 
-const autoSkipIntroChk = document.getElementById('chk-auto-skip-intro');
-window.api.getAutoSkipIntro().then((v) => { if (autoSkipIntroChk) autoSkipIntroChk.checked = !!v; }).catch(() => {});
-if (autoSkipIntroChk) {
-  autoSkipIntroChk.addEventListener('change', () => {
-    window.api.setAutoSkipIntro(autoSkipIntroChk.checked).catch(() => {});
-  });
-}
-window.api.onAutoSkipIntroChanged((v) => {
-  if (autoSkipIntroChk) autoSkipIntroChk.checked = !!v;
-});
-
-// --- Configurações: Lista de Perfis Acústicos Salvos ---
-const introProfilesListEl = document.getElementById('intro-profiles-list');
-
-async function renderIntroProfiles() {
-  if (!introProfilesListEl) return;
-  try {
-    const profiles = await window.api.getIntroProfiles();
-    introProfilesListEl.innerHTML = '';
-    if (!profiles || profiles.length === 0) {
-      introProfilesListEl.innerHTML = `
-        <div class="intro-profiles-empty" data-i18n="player.introProfiles.empty">
-          ${t('player.introProfiles.empty')}
-        </div>
-      `;
-      return;
-    }
-
-    profiles.forEach((p) => {
-      const item = document.createElement('div');
-      item.className = 'intro-profile-item';
-      const hasAcoustic = Array.isArray(p.signature) && p.signature.length > 0;
-      const startStr = typeof p.defaultStart === 'number' ? formatClock(p.defaultStart) : '--:--';
-      const durStr = Math.round(p.duration || 0) + 's';
-
-      item.innerHTML = `
-        <div class="intro-profile-info">
-          <div class="intro-profile-title-row">
-            <span class="intro-profile-title">${p.title || 'Abertura'}</span>
-            <span class="intro-profile-tag ${hasAcoustic ? 'acoustic' : 'interval'}">
-              ${hasAcoustic ? '🎵 ' + t('player.introProfiles.acousticActive') : '⏱ ' + t('player.introProfiles.intervalOnly')}
-            </span>
-          </div>
-          <span class="intro-profile-meta">Início padrão: ${startStr} · Duração: ${durStr}</span>
-        </div>
-        <div class="intro-profile-actions">
-          <button type="button" class="intro-profile-delete-btn" title="${t('player.introProfiles.delete')}" data-id="${p.id}">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </div>
-      `;
-
-      item.querySelector('.intro-profile-delete-btn').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        await window.api.deleteIntroProfile(p.id);
-        renderIntroProfiles();
-      });
-
-      introProfilesListEl.appendChild(item);
-    });
-  } catch {}
-}
-
-renderIntroProfiles();
-window.api.onIntroDetected(() => renderIntroProfiles());
-
 // --- Configurações: Geral (janela sempre visível) ---
 const alwaysOnTopChk = document.getElementById('chk-always-on-top');
 window.api.getAlwaysOnTop().then((v) => { alwaysOnTopChk.checked = !!v; }).catch(() => {});
@@ -758,20 +707,58 @@ function isNetworkTarget(target) {
 
 function buildHistoryRow(entry) {
   const li = document.createElement('li');
-  li.className = 'file';
+  li.className = 'file history-row-item';
 
-  const icon = document.createElement('span');
-  icon.className = 'row-icon';
-  icon.innerHTML = HISTORY_ICON;
+  let iconOrPoster;
+  if (entry.poster) {
+    iconOrPoster = document.createElement('div');
+    iconOrPoster.className = 'history-poster-wrap';
+    const img = document.createElement('img');
+    img.className = 'history-poster';
+    img.src = entry.poster;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.onerror = () => {
+      iconOrPoster.className = 'row-icon';
+      iconOrPoster.innerHTML = HISTORY_ICON;
+    };
+    iconOrPoster.appendChild(img);
+  } else {
+    iconOrPoster = document.createElement('span');
+    iconOrPoster.className = 'row-icon';
+    iconOrPoster.innerHTML = HISTORY_ICON;
+  }
 
   const main = document.createElement('div');
   main.className = 'history-row-main';
 
+  const titleRow = document.createElement('div');
+  titleRow.className = 'history-row-header';
+
   const title = document.createElement('span');
   title.className = 'history-row-title';
-  title.textContent = displayNameFor(entry.target);
+
+  const baseName = displayNameFor(entry.target);
+  let displayTitle = entry.title;
+  if (!displayTitle && entry.seriesTitle) {
+    displayTitle = `${entry.seriesTitle} — T${entry.season || 1} Ep ${entry.episode || 1}`;
+  }
+  if (!displayTitle) {
+    displayTitle = isGarbageTitle(baseName) ? 'Transmissão YouCine (DLNA)' : baseName;
+  }
+
+  title.textContent = displayTitle;
   title.title = entry.target;
-  main.appendChild(title);
+  titleRow.appendChild(title);
+
+  if (entry.seriesTitle && !displayTitle.includes(`T${entry.season}`)) {
+    const badge = document.createElement('span');
+    badge.className = 'history-badge';
+    badge.textContent = `T${entry.season || 1} Ep ${entry.episode || 1}`;
+    titleRow.appendChild(badge);
+  }
+
+  main.appendChild(titleRow);
 
   if (entry.duration) {
     const pct = Math.min(100, Math.max(0, (entry.position / entry.duration) * 100));
@@ -828,7 +815,7 @@ function buildHistoryRow(entry) {
 
   actions.appendChild(removeBtn);
 
-  li.appendChild(icon);
+  li.appendChild(iconOrPoster);
   li.appendChild(main);
   li.appendChild(actions);
   return li;
@@ -1116,3 +1103,94 @@ function handleActivity() {
 
 window.api.onActivity(handleActivity);
 window.addEventListener('mousemove', handleActivity);
+
+// --- Configurações de Legendas Online (SubDL + OpenSubtitles) ---
+const inputSubdlKey = document.getElementById('input-subdl-key');
+const btnToggleSubdlKey = document.getElementById('btn-toggle-subdl-key');
+const subdlQuotaDisplay = document.getElementById('subdl-quota-display');
+
+const inputOsKey = document.getElementById('input-opensubtitles-key');
+const btnToggleOsKey = document.getElementById('btn-toggle-opensubtitles-key');
+const osQuotaDisplay = document.getElementById('opensubtitles-quota-display');
+
+const selSubtitlesLang = document.getElementById('sel-subtitles-lang');
+const selSubtitlesMode = document.getElementById('sel-subtitles-mode');
+const chkSubtitlesAutoNext = document.getElementById('chk-subtitles-auto-next');
+const chkSkipIntroAuto = document.getElementById('chk-skip-intro-auto');
+const btnClearSubtitlesCache = document.getElementById('btn-clear-subtitles-cache');
+
+const linkSubdl = document.getElementById('link-subdl');
+const linkOs = document.getElementById('link-opensubtitles');
+if (linkSubdl) linkSubdl.addEventListener('click', (e) => { e.preventDefault(); window.api.openExternal('https://subdl.com').catch(() => {}); });
+if (linkOs) linkOs.addEventListener('click', (e) => { e.preventDefault(); window.api.openExternal('https://www.opensubtitles.com').catch(() => {}); });
+
+if (btnToggleSubdlKey) {
+  btnToggleSubdlKey.addEventListener('click', () => {
+    inputSubdlKey.type = inputSubdlKey.type === 'password' ? 'text' : 'password';
+    btnToggleSubdlKey.textContent = inputSubdlKey.type === 'password' ? 'Mostrar' : 'Ocultar';
+  });
+}
+
+if (btnToggleOsKey) {
+  btnToggleOsKey.addEventListener('click', () => {
+    inputOsKey.type = inputOsKey.type === 'password' ? 'text' : 'password';
+    btnToggleOsKey.textContent = inputOsKey.type === 'password' ? 'Mostrar' : 'Ocultar';
+  });
+}
+
+function updateSubtitlesUi(state) {
+  if (!state) return;
+  if (state.quota) {
+    if (subdlQuotaDisplay) {
+      subdlQuotaDisplay.textContent = `Downloads hoje: ${state.quota.subdl.used} de ${state.quota.subdl.max} (${state.quota.subdl.remaining} restantes)`;
+    }
+    if (osQuotaDisplay) {
+      osQuotaDisplay.textContent = `Downloads hoje: ${state.quota.openSubtitles.used} de ${state.quota.openSubtitles.max} (${state.quota.openSubtitles.remaining} restantes)`;
+    }
+  }
+}
+
+window.api.getSubtitlesState().then((state) => {
+  if (state) updateSubtitlesUi(state);
+}).catch(() => {});
+
+window.api.getSettings().then((s) => {
+  if (inputSubdlKey && s.subdlApiKey) inputSubdlKey.value = s.subdlApiKey;
+  if (inputOsKey && s.openSubtitlesApiKey) inputOsKey.value = s.openSubtitlesApiKey;
+  if (selSubtitlesLang && s.subtitlesLanguage) selSubtitlesLang.value = s.subtitlesLanguage;
+  if (selSubtitlesMode && s.subtitlesMode) selSubtitlesMode.value = s.subtitlesMode;
+  if (chkSubtitlesAutoNext) chkSubtitlesAutoNext.checked = s.subtitlesAutoDownloadNext !== false;
+  if (chkSkipIntroAuto) chkSkipIntroAuto.checked = s.skipIntroAuto === true;
+}).catch(() => {});
+
+function saveSubConfig() {
+  window.api.saveSubtitlesConfig({
+    subdlApiKey: inputSubdlKey ? inputSubdlKey.value : '',
+    openSubtitlesApiKey: inputOsKey ? inputOsKey.value : '',
+    subtitlesLanguage: selSubtitlesLang ? selSubtitlesLang.value : 'pob',
+    subtitlesMode: selSubtitlesMode ? selSubtitlesMode.value : 'signs_priority',
+    subtitlesAutoDownloadNext: chkSubtitlesAutoNext ? chkSubtitlesAutoNext.checked : true,
+    skipIntroAuto: chkSkipIntroAuto ? chkSkipIntroAuto.checked : false,
+  }).then(updateSubtitlesUi).catch(() => {});
+}
+
+if (inputSubdlKey) inputSubdlKey.addEventListener('change', saveSubConfig);
+if (inputOsKey) inputOsKey.addEventListener('change', saveSubConfig);
+if (selSubtitlesLang) selSubtitlesLang.addEventListener('change', saveSubConfig);
+if (selSubtitlesMode) selSubtitlesMode.addEventListener('change', saveSubConfig);
+if (chkSubtitlesAutoNext) chkSubtitlesAutoNext.addEventListener('change', saveSubConfig);
+if (chkSkipIntroAuto) chkSkipIntroAuto.addEventListener('change', saveSubConfig);
+
+if (btnClearSubtitlesCache) {
+  btnClearSubtitlesCache.addEventListener('click', async () => {
+    const ok = await window.api.clearSubtitlesCache();
+    if (ok) {
+      btnClearSubtitlesCache.textContent = 'Cache limpo com sucesso!';
+      setTimeout(() => { btnClearSubtitlesCache.textContent = 'Limpar cache de legendas'; }, 2000);
+    }
+  });
+}
+
+window.api.onSubtitlesStateChanged((state) => {
+  updateSubtitlesUi(state);
+});

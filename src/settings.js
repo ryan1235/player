@@ -14,7 +14,6 @@ const DEFAULTS = {
   audioDelaySecs: 0,
   audioPreset: 'flat',
   autoPlayNext: false,
-  autoSkipIntro: false,
   autoReconnectCast: false,
   checkUpdatesAutomatically: false,
   // Sistema de Live (Configuracoes > Ao Vivo) — ver src/live/buffer-manager.js.
@@ -23,6 +22,17 @@ const DEFAULTS = {
   liveCustomTargetSecs: 5,
   showLiveQualityLabel: true,
   showLiveEventToasts: true,
+  // Sistema de Legendas Online e Rastreamento de Sessão
+  subdlApiKey: '',
+  openSubtitlesApiKey: '',
+  subtitlesLanguage: 'pob',
+  subtitlesAutoDownloadNext: true,
+  subtitlesMode: 'signs_priority',
+  subtitlesQuota: null,
+  recentSeries: [],
+  // Pular Abertura (SkipDB)
+  skipIntroEnabled: true,
+  skipIntroAuto: false,
 };
 
 class Settings {

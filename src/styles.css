@@ -1006,22 +1006,67 @@ body.fullscreen-mode .app-status-bar {
 .history-list li {
   cursor: default;
   align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
 }
 .history-list li:hover { transform: none; box-shadow: none; }
+
+.history-poster-wrap {
+  width: 44px;
+  height: 62px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.history-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 .history-row-main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+}
+
+.history-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .history-row-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.history-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  line-height: 1.3;
 }
 
 .history-progress-track {
@@ -1254,107 +1299,3 @@ body.idle *,
   cursor: none !important;
 }
 
-/* --- Lista de Perfis Acústicos de Abertura nas Configurações --- */
-.intro-profiles-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.intro-profile-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: border-color var(--transition-fast);
-}
-
-.intro-profile-item:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-}
-
-.intro-profile-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.intro-profile-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.intro-profile-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.intro-profile-tag {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-  line-height: 1;
-}
-
-.intro-profile-tag.acoustic {
-  background: rgba(79, 134, 247, 0.2);
-  color: #82adff;
-  border: 1px solid rgba(79, 134, 247, 0.35);
-}
-
-.intro-profile-tag.interval {
-  background: rgba(255, 200, 60, 0.18);
-  color: #ffd866;
-  border: 1px solid rgba(255, 200, 60, 0.3);
-}
-
-.intro-profile-meta {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.intro-profile-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.intro-profile-delete-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.intro-profile-delete-btn:hover {
-  background: rgba(255, 77, 79, 0.15);
-  color: #ff4d4f;
-}
-
-.intro-profiles-empty {
-  padding: 14px;
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--bg-surface);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-  text-align: center;
-}

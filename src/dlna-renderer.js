@@ -17,6 +17,15 @@ const AVTRANSPORT_TYPE = 'urn:schemas-upnp-org:service:AVTransport:1';
 const RENDERINGCONTROL_TYPE = 'urn:schemas-upnp-org:service:RenderingControl:1';
 const CONNECTIONMANAGER_TYPE = 'urn:schemas-upnp-org:service:ConnectionManager:1';
 
+const DLNA_LOG_FILE = path.join(__dirname, '..', 'dlna-debug.log');
+function logDlna(text) {
+  const timestamp = new Date().toISOString();
+  const entry = `[${timestamp}] ${text}\n`;
+  try {
+    fs.appendFileSync(DLNA_LOG_FILE, entry, 'utf8');
+  } catch {}
+}
+
 function escapeXml(str) {
   return String(str).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 }
@@ -89,17 +98,15 @@ function parseTime(str) {
   return h * 3600 + m * 60 + s;
 }
 
-// Extrai titulo e URL de legenda externa do DIDL-Lite que os apps de cast
-// (BubbleUPnP, VLC mobile, etc.) mandam junto com SetAVTransportURI. So um
-// parser best-effort: se o formato nao bater com nada conhecido, so ignora.
+// Extrai titulo, URL de legenda externa e detalhes do DIDL-Lite que os apps de cast mandam.
 function parseDidlMetadata(xml) {
-  const empty = { title: null, subtitleUrl: null };
+  const empty = { title: null, subtitleUrl: null, item: null };
   if (!xml) return empty;
   try {
     const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: false, attributeNamePrefix: '@_' });
     const parsed = parser.parse(xml);
     const item = parsed?.['DIDL-Lite']?.item;
-    if (!item) return empty;
+    if (!item) return { title: null, subtitleUrl: null, item: parsed };
 
     const rawTitle = item.title;
     const title = typeof rawTitle === 'string' ? rawTitle : rawTitle?.['#text'] || null;
@@ -127,9 +134,9 @@ function parseDidlMetadata(xml) {
       if (captionEl) subtitleUrl = typeof captionEl === 'string' ? captionEl : captionEl['#text'] || null;
     }
 
-    return { title: title || null, subtitleUrl: subtitleUrl || null };
-  } catch {
-    return empty;
+    return { title: title || null, subtitleUrl: subtitleUrl || null, item };
+  } catch (err) {
+    return { title: null, subtitleUrl: null, item: null, error: err.message };
   }
 }
 
@@ -338,6 +345,8 @@ class DlnaRenderer extends EventEmitter {
     this.currentUri = '';
     this.currentTitle = null;
     this.currentURIMetaData = '';
+    // Contexto de série enviado pelo Aura Sync (Android) via POST /api/now-playing
+    this.syncSeriesContext = null;
 
     // Se algo diferente do que a gente mandou tocar via DLNA comecar a
     // rodar (ex.: usuario abriu um arquivo local pela aba "Arquivos locais"),
@@ -478,8 +487,18 @@ class DlnaRenderer extends EventEmitter {
   }
 
   async _handleRequest(req, res) {
-    console.log(`[dlna-renderer] ${req.method} ${req.url} de ${req.socket.remoteAddress}`);
+    const remote = req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || '(não informado)';
+    const soapAction = req.headers.soapaction || '';
     
+    console.log(`\n------------------------------------------------------------`);
+    console.log(`📡 [DLNA-HTTP] ${req.method} ${req.url}`);
+    console.log(`   De: ${remote} | User-Agent: ${userAgent}`);
+    if (soapAction) console.log(`   SOAPAction: ${soapAction}`);
+    console.log(`------------------------------------------------------------`);
+    logger.network(`[dlna-http] ${req.method} ${req.url} de ${remote} (UA: ${userAgent})`);
+    logDlna(`📡 [DLNA-HTTP] ${req.method} ${req.url} | Remote: ${remote} | User-Agent: ${userAgent} | SOAPAction: ${soapAction}`);
+
     const sendXml = (status, xml) => {
       const buf = Buffer.from(xml, 'utf8');
       res.writeHead(status, {
@@ -490,28 +509,189 @@ class DlnaRenderer extends EventEmitter {
       res.end(buf);
     };
 
+    const sendJson = (status, data) => {
+      const buf = Buffer.from(JSON.stringify(data), 'utf8');
+      res.writeHead(status, {
+        'Content-Type': 'application/json; charset="utf-8"',
+        'Content-Length': buf.length,
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Connection': 'close'
+      });
+      res.end(buf);
+    };
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Connection': 'close'
+      });
+      res.end();
+      return;
+    }
+
     try {
       const url = req.url.split('?')[0];
 
+      // --- REST API para App Mobile / Expo / Controle Remoto ---
+      if (req.method === 'GET' && url === '/api/status') {
+        const player = this.player;
+        let pos = 0, dur = 0, paused = false, vol = 100, mute = false, idle = true;
+        if (player) {
+          try {
+            pos = await player.getProperty('time-pos', 0);
+            dur = await player.getProperty('duration', 0);
+            paused = await player.getProperty('pause', false);
+            vol = await player.getProperty('volume', 100);
+            mute = await player.getProperty('mute', false);
+            idle = await player.getProperty('idle-active', true);
+          } catch {}
+        }
+        sendJson(200, {
+          ok: true,
+          friendlyName: this.friendlyName,
+          ip: this.ip,
+          port: this.port,
+          currentUri: this.currentUri || '',
+          title: this.currentTitle || (player && player.currentTarget ? path.basename(player.currentTarget) : 'Nada em reprodução'),
+          position: pos || 0,
+          duration: dur || 0,
+          paused: !!paused,
+          volume: Math.round(vol || 100),
+          mute: !!mute,
+          idle: !!idle,
+        });
+        return;
+      }
+
+      if (req.method === 'POST' && url === '/api/play') {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        let body = {};
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch {}
+        const { uri, title, subtitleUrl } = body;
+        if (!uri || !isSafeMediaUrl(uri)) {
+          sendJson(400, { ok: false, error: 'URI precisa ser http:// ou https:// válida' });
+          return;
+        }
+        this.currentUri = uri;
+        this.currentTitle = title || null;
+        this._emitSource(remote, title);
+        if (this.player) {
+          await this.player.loadFile(uri);
+          if (subtitleUrl && isSafeMediaUrl(subtitleUrl)) {
+            await this.player.command(['sub-add', subtitleUrl, 'select']).catch(() => {});
+          }
+        }
+        sendJson(200, { ok: true, message: 'Reprodução iniciada', uri, title });
+        return;
+      }
+
+      if (req.method === 'POST' && url === '/api/control') {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        let body = {};
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch {}
+        const { action, value } = body;
+        const player = this.player;
+        if (!player) {
+          sendJson(500, { ok: false, error: 'Player não inicializado' });
+          return;
+        }
+        switch (action) {
+          case 'play':
+            await player.play();
+            break;
+          case 'pause':
+            await player.pause();
+            break;
+          case 'togglePlay': {
+            const isPaused = await player.getProperty('pause', false);
+            if (isPaused) await player.play();
+            else await player.pause();
+            break;
+          }
+          case 'seek':
+            await player.seek(Number(value) || 0);
+            break;
+          case 'seekAbsolute':
+            await player.seekAbsolute(Number(value) || 0);
+            break;
+          case 'volume':
+            await player.setVolume(Number(value) || 100);
+            break;
+          case 'toggleMute':
+            await player.toggleMute();
+            break;
+          case 'stop':
+            await player.stop();
+            break;
+          default:
+            sendJson(400, { ok: false, error: `Ação desconhecida: ${action}` });
+            return;
+        }
+        sendJson(200, { ok: true, action, value });
+        return;
+      }
+
+      // --- Aura Sync: recebe metadados do conteúdo em reprodução no Yucine (Android) ---
+      if (req.method === 'POST' && url === '/api/now-playing') {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        let body = {};
+        try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch {
+          sendJson(400, { ok: false, error: 'JSON inválido' });
+          return;
+        }
+
+        const title = typeof body.title === 'string' ? body.title.trim() : null;
+        const season = parseInt(body.season, 10) || null;
+        const episode = parseInt(body.episode, 10) || null;
+        const imdbId = typeof body.imdbId === 'string' ? body.imdbId.trim() : null;
+
+        if (!title) {
+          sendJson(400, { ok: false, error: 'Campo "title" obrigatório' });
+          return;
+        }
+
+        // Salva o contexto de série atual para associar ao próximo SetAVTransportURI
+        this.syncSeriesContext = { title, season, episode, imdbId, receivedAt: Date.now() };
+        logger.network(`[aura-sync] now-playing recebido: ${title} S${season}E${episode}`);
+
+        // Emite para o main.js iniciar a consulta ao SkipDB
+        this.emit('sync:now-playing', this.syncSeriesContext);
+
+        sendJson(200, { ok: true, title, season, episode });
+        return;
+      }
+
       if (req.method === 'GET' && url === '/description.xml') {
+        console.log(`🔍 [DLNA] Requisição de device description (SSDP/UPnP Discovery) por ${remote}`);
         this.emit('activity', { type: 'discovery', remote: req.socket.remoteAddress });
         sendXml(200, this._descriptionXml());
         return;
       }
       if (req.method === 'GET' && url === '/avtransport.xml') {
+        console.log(`📄 [DLNA] Requisição de AVTransport SCPD por ${remote}`);
         sendXml(200, AVTRANSPORT_SCPD);
         return;
       }
       if (req.method === 'GET' && url === '/renderingcontrol.xml') {
+        console.log(`📄 [DLNA] Requisição de RenderingControl SCPD por ${remote}`);
         sendXml(200, RENDERINGCONTROL_SCPD);
         return;
       }
       if (req.method === 'GET' && url === '/connectionmanager.xml') {
+        console.log(`📄 [DLNA] Requisição de ConnectionManager SCPD por ${remote}`);
         sendXml(200, CONNECTIONMANAGER_SCPD);
         return;
       }
 
       if (req.method === 'SUBSCRIBE' || req.method === 'UNSUBSCRIBE') {
+        console.log(`🔔 [DLNA] Event subscription (${req.method}) de ${remote}: Callback=${req.headers.callback || '-'} NT=${req.headers.nt || '-'}`);
         res.writeHead(200, {
           SID: `uuid:${crypto.randomUUID()}`,
           TIMEOUT: 'Second-1800',
@@ -529,9 +709,11 @@ class DlnaRenderer extends EventEmitter {
         return;
       }
 
+      console.log(`⚠️ [DLNA] Rota não encontrada: ${req.method} ${url}`);
       res.writeHead(404, { 'Connection': 'close' });
       res.end();
     } catch (err) {
+      console.error(`❌ [DLNA] Erro no _handleRequest:`, err);
       try {
         sendXml(500, soapFault(501, err.message || 'Action Failed'));
       } catch {
@@ -543,12 +725,28 @@ class DlnaRenderer extends EventEmitter {
   async _handleControl(url, soapActionHeader, body, res, sendXml, remote) {
     const actionMatch = /#([^"]+)"?$/.exec(soapActionHeader);
     const action = actionMatch ? actionMatch[1] : null;
-    console.log(`[dlna-renderer] acao SOAP: ${action} em ${url}`);
+    
+    console.log(`\n⚡ ================== [DLNA AÇÃO SOAP: ${action || 'Desconhecida'}] ==================`);
+    console.log(`   Origem: ${remote}`);
+    console.log(`   URL de Controle: ${url}`);
+    console.log(`   SOAPAction: ${soapActionHeader}`);
+    logger.network(`[dlna-soap] Ação: ${action} em ${url} de ${remote}`);
     this.emit('activity', { type: 'action', action, remote });
 
-    const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: true });
-    const parsed = parser.parse(body);
-    const args = parsed?.Envelope?.Body?.[action] || {};
+    let args = {};
+    try {
+      const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: false, attributeNamePrefix: '@_' });
+      const parsed = parser.parse(body);
+      args = parsed?.Envelope?.Body?.[action] || {};
+    } catch {
+      const parser = new XMLParser({ removeNSPrefix: true, ignoreAttributes: true });
+      const parsed = parser.parse(body);
+      args = parsed?.Envelope?.Body?.[action] || {};
+    }
+
+    if (action !== 'GetPositionInfo' && action !== 'GetTransportInfo') {
+      console.log(`   Argumentos recebidos:\n`, JSON.stringify(args, null, 2));
+    }
 
     let serviceType = AVTRANSPORT_TYPE;
     if (url.includes('renderingcontrol')) serviceType = RENDERINGCONTROL_TYPE;
@@ -558,12 +756,14 @@ class DlnaRenderer extends EventEmitter {
     try {
       out = await this._runAction(serviceType, action, args, remote);
     } catch (err) {
-      console.log(`[dlna-renderer] acao ${action} falhou: ${err.message}`);
+      console.error(`❌ [DLNA] Ação ${action} falhou: ${err.message}`);
+      logger.network(`[dlna-error] Ação ${action} falhou: ${err.message}`);
       sendXml(500, soapFault(501, err.message || 'Action Failed'));
       return;
     }
 
     if (out === null) {
+      console.warn(`⚠️ [DLNA] Ação inválida ou não implementada: ${action}`);
       sendXml(401, soapFault(401, 'Invalid Action'));
       return;
     }
@@ -584,19 +784,28 @@ class DlnaRenderer extends EventEmitter {
           }
           this.currentUri = requestedUri;
           this.currentURIMetaData = args.CurrentURIMetaData || '';
-          const { title, subtitleUrl } = parseDidlMetadata(args.CurrentURIMetaData);
-          // Debug temporario: log completo do que o celular manda, pra
-          // entender o formato real (upnp:class, protocolInfo, duration
-          // etc.) antes de decidir o que o app deve ler/usar disso.
-          logger.network(`[cast-debug] SetAVTransportURI de ${remote}`);
-          logger.network(`[cast-debug] CurrentURI: ${this.currentUri}`);
-          logger.network(`[cast-debug] CurrentURIMetaData (DIDL-Lite bruto):\n${args.CurrentURIMetaData || '(vazio)'}`);
-          logger.network(`[cast-debug] Parseado -> title=${JSON.stringify(title)} subtitleUrl=${JSON.stringify(subtitleUrl)}`);
+          const metaResult = parseDidlMetadata(args.CurrentURIMetaData);
+          const { title, subtitleUrl } = metaResult;
+
+          console.log(`\n🎬 ==================== [DLNA FONTE TRANSMITINDO MÍDIA] ====================`);
+          console.log(`📍 IP Remoto: ${remote}`);
+          console.log(`🔗 CurrentURI (Link do Vídeo): ${this.currentUri}`);
+          console.log(`🏷️ Título Parseado: ${title || '(não detectado)'}`);
+          console.log(`💬 Subtitle URL (Legenda Externa): ${subtitleUrl || '(nenhuma encontrada no XML)'}`);
+          if (metaResult.item) {
+            console.log(`📦 DIDL-Lite Estruturado (JSON Completo):`);
+            console.log(JSON.stringify(metaResult.item, null, 2));
+          }
+          console.log(`📝 DIDL-Lite Bruto (XML Original):\n${args.CurrentURIMetaData || '(vazio)'}`);
+          console.log(`===========================================================================\n`);
+
+          logger.network(`[cast-media] Nova mídia recebida de ${remote}:`);
+          logger.network(`[cast-media] URI: ${this.currentUri}`);
+          logger.network(`[cast-media] Título: ${title || '(sem título)'}`);
+          if (subtitleUrl) logger.network(`[cast-media] Legenda: ${subtitleUrl}`);
+
           this.currentTitle = title;
           this._emitSource(remote, title);
-          // Dispara o carregamento do arquivo mas não bloqueia a resposta SOAP.
-          // Se bloquearmos, o celular vai ficar esperando até 6 segundos (do _waitForDuration)
-          // antes de poder enviar o comando de "Play".
           player
             .loadFile(this.currentUri)
             .then(() => {
@@ -605,13 +814,24 @@ class DlnaRenderer extends EventEmitter {
             .catch((err) => console.error('[dlna] erro no loadFile', err));
           return {};
         }
+        case 'SetNextAVTransportURI': {
+          console.log(`\n⏭️ [DLNA] SetNextAVTransportURI de ${remote}: NextURI=${args.NextURI}`);
+          logger.network(`[cast-media] SetNextAVTransportURI de ${remote}: ${args.NextURI}`);
+          return {};
+        }
         case 'Play':
+          console.log(`▶️ [DLNA] Comando Play recebido de ${remote} (Speed: ${args.Speed || '1'})`);
+          logger.network(`[dlna] Play de ${remote}`);
           await player.play();
           return {};
         case 'Pause':
+          console.log(`⏸️ [DLNA] Comando Pause recebido de ${remote}`);
+          logger.network(`[dlna] Pause de ${remote}`);
           await player.pause();
           return {};
         case 'Stop':
+          console.log(`⏹️ [DLNA] Comando Stop recebido de ${remote}`);
+          logger.network(`[dlna] Stop de ${remote}`);
           await player.stop();
           this.currentUri = '';
           this.currentTitle = null;
@@ -619,6 +839,8 @@ class DlnaRenderer extends EventEmitter {
           this._emitSource(null, null);
           return {};
         case 'Seek': {
+          console.log(`⏩ [DLNA] Comando Seek recebido de ${remote}: Unit=${args.Unit} Target=${args.Target}`);
+          logger.network(`[dlna] Seek de ${remote}: ${args.Target}`);
           const target = parseTime(args.Target || '0:00:00');
           await player.command(['seek', target, 'absolute']);
           return {};

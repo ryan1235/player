@@ -28,7 +28,20 @@ class WatchHistory {
   }
 
   set(key, entry) {
-    this.data[key] = { ...entry, updatedAt: Date.now() };
+    const prev = this.data[key] || {};
+    this.data[key] = { ...prev, ...entry, updatedAt: Date.now() };
+    this._persist();
+  }
+
+  removeSeriesMetadata(key, defaultTitle) {
+    if (!this.data[key]) return;
+    const item = this.data[key];
+    delete item.seriesTitle;
+    delete item.season;
+    delete item.episode;
+    delete item.imdbId;
+    delete item.poster;
+    if (defaultTitle) item.title = defaultTitle;
     this._persist();
   }
 

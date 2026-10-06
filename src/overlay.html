@@ -22,7 +22,7 @@
         <div class="ov-progress-hit" id="ov-progress-hit">
           <div class="ov-progress-track">
             <div class="ov-progress-buffered" id="ov-progress-buffered"></div>
-            <div class="ov-progress-intro" id="ov-progress-intro" hidden></div>
+            <div class="ov-progress-segments" id="ov-progress-segments"></div>
             <div class="ov-progress-played" id="ov-progress-played"></div>
             <div class="ov-progress-thumb" id="ov-progress-thumb"></div>
           </div>
@@ -85,8 +85,8 @@
               </button>
               <div class="ov-menu" id="ov-audio-menu" role="menu" aria-label="Áudio"></div>
             </div>
-            <div class="ov-menu-wrap" id="ov-subtitle-wrap" hidden>
-              <button id="btn-subtitle-menu" class="ov-btn" aria-label="Legendas" aria-haspopup="true" aria-expanded="false" title="Legendas">
+            <div class="ov-menu-wrap" id="ov-subtitle-wrap">
+              <button id="btn-subtitle-menu" class="ov-btn" aria-label="Legendas" aria-haspopup="true" aria-expanded="false" title="Legendas (C)">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 15v-2a2 2 0 0 1 2-2h1M14 15v-2a2 2 0 0 1 2-2h1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
               </button>
               <div class="ov-menu" id="ov-subtitle-menu" role="menu" aria-label="Legendas"></div>
@@ -128,46 +128,20 @@
       </div>
     </div>
 
-    <!-- Flash de Transição Suave ao Pular -->
-    <div class="ov-seek-flash" id="ov-seek-flash" aria-hidden="true"></div>
-
-    <!-- Botão Flutuante de Pular Abertura (Netflix Style) -->
-    <button type="button" class="ov-skip-intro-btn" id="btn-skip-intro" hidden>
-      <svg class="ov-skip-ring" id="ov-skip-ring" viewBox="0 0 32 32" hidden>
-        <circle class="ov-skip-ring-bg" cx="16" cy="16" r="13"></circle>
-        <circle class="ov-skip-ring-bar" id="ov-skip-ring-bar" cx="16" cy="16" r="13"></circle>
-      </svg>
-      <svg class="ov-skip-icon" id="ov-skip-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-        <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
-      </svg>
-      <span class="ov-skip-intro-text" id="ov-skip-text">Pular Abertura</span>
-      <span class="ov-skip-intro-key" id="ov-skip-key">S</span>
-      <span class="ov-skip-cancel-hint" id="ov-skip-cancel-hint" hidden>C para assistir</span>
-    </button>
-
-    <!-- HUD de Marcação de Abertura (Episódio 1) -->
-    <div class="ov-intro-hud" id="ov-intro-hud" hidden>
-      <div class="ov-intro-hud-header">
-        <span class="ov-intro-hud-title">Marcar Abertura</span>
-        <button type="button" class="ov-intro-hud-close" id="btn-close-intro-hud" title="Fechar">✕</button>
-      </div>
-      <div class="ov-intro-hud-desc">Marque o início e o fim para o player aprender o som da abertura:</div>
-      <div class="ov-intro-hud-actions">
-        <button type="button" class="ov-intro-step-btn" id="btn-mark-start">
-          <span class="ov-step-label">▶ Início (I)</span>
-          <b class="ov-step-time" id="lbl-intro-start">--:--</b>
-        </button>
-        <button type="button" class="ov-intro-step-btn" id="btn-mark-end">
-          <span class="ov-step-label">⏹ Fim (O)</span>
-          <b class="ov-step-time" id="lbl-intro-end">--:--</b>
-        </button>
-      </div>
-      <div class="ov-intro-hud-footer">
-        <button type="button" class="ov-intro-save-btn" id="btn-save-intro" disabled>
-          💾 Salvar & Extrair Assinatura
-        </button>
-      </div>
+    <!-- Banner Inteligente no Topo (Identificação DLNA & Avanço de Episódio) -->
+    <div class="ov-smart-banner" id="ov-smart-banner" hidden>
+      <div class="ov-smart-banner-content" id="ov-smart-banner-content"></div>
     </div>
+
+    <!-- Botão de Pular Abertura (SkipDB) -->
+    <div class="ov-skip-container" id="ov-skip-container" hidden>
+      <button type="button" class="ov-skip-btn" id="btn-skip-intro">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M5 4v16l11-8L5 4zm13 0v16h2V4h-2z"/></svg>
+        <span id="skip-btn-label">Pular Abertura</span>
+        <span class="ov-skip-badge-key">S</span>
+      </button>
+    </div>
+
     <div class="ov-osd" id="ov-osd" hidden>
       <div class="ov-osd-icon" id="ov-osd-icon"></div>
       <div class="ov-osd-content">
