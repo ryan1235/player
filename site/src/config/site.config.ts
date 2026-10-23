@@ -7,7 +7,7 @@
 
 export const siteConfig = {
   appName: 'Aura Player',
-  version: '1.0.0', // extraido de package.json (player/package.json)
+  version: '1.1.0', // extraido de package.json (player/package.json)
   tagline: {
     pt: 'Sua mídia. Do seu jeito.',
     en: 'Your media. Your way.',
@@ -39,7 +39,7 @@ export const siteConfig = {
   // enquanto o link fica fixo nela.
   links: {
     github: 'https://github.com/ryan1235/player' as string | null,
-    releaseDownloadWindows: 'https://github.com/ryan1235/player/releases/download/v1.0.0/Aura.Player.Setup.1.0.0.exe' as string | null,
+    releaseDownloadWindows: 'https://github.com/ryan1235/player/releases/latest/download/AuraPlayerSetup.exe' as string | null,
     documentation: null as string | null,
   },
 

@@ -1,7 +1,7 @@
 name: Build and release Windows installer
 
 # Dispara em duas situacoes:
-#   1. push de uma tag "v*.*.*" (ex.: v1.0.0) -> builda E publica um Release
+#   1. push de uma tag "v*.*.*" (ex.: v1.1.0) -> builda E publica um Release
 #      no GitHub com o instalador anexado como asset.
 #   2. manualmente, via aba Actions > Run workflow -> so builda e disponibiliza
 #      o instalador como artifact de build (sem criar Release), util pra
@@ -11,6 +11,9 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -30,22 +33,44 @@ jobs:
       # bin/mpv.exe (~120MB, binario) NAO fica no git (ver .gitignore) —
       # precisa existir localmente so pra empacotar junto no instalador
       # (ver src/mpv.js: resolveMpvBinary() usa SO bin/mpv.exe, sem
-      # fallback pro mpv do sistema). Aqui buscamos via winget, a mesma
-      # fonte que o README ja recomenda pros usuarios.
+      # fallback pro mpv do sistema). Baixamos o build standalone direto do shinchiro.
       - name: Baixar mpv (embutido no instalador)
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          winget install --id mpv.mpv -e --silent --accept-package-agreements --accept-source-agreements
-          $mpvExe = Get-ChildItem -Path "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" -Recurse -Filter "mpv.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $mpvExe) {
-            Write-Error "mpv.exe nao encontrado apos 'winget install' — o instalador NAO pode ser gerado sem ele (ver src/mpv.js, resolveMpvBinary nao tem fallback)."
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          $temp7z = "$env:RUNNER_TEMP\mpv.7z"
+          $tempDir = "$env:RUNNER_TEMP\mpv-extracted"
+          New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
+
+          $headers = @{}
+          if ($env:GITHUB_TOKEN) {
+            $headers["Authorization"] = "Bearer $env:GITHUB_TOKEN"
+          }
+
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest" -Headers $headers
+          $asset = $release.assets | Where-Object { $_.name -like "mpv-x86_64-*.7z" -and $_.name -notlike "*v3*" } | Select-Object -First 1
+          if (-not $asset) {
+            Write-Error "Asset mpv x86_64 nao encontrado no release do shinchiro."
             exit 1
           }
-          New-Item -ItemType Directory -Force -Path bin | Out-Null
+
+          Write-Host "Baixando mpv de $($asset.browser_download_url)..."
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $temp7z
+          tar -xf $temp7z -C $tempDir
+          $mpvExe = Get-ChildItem -Path $tempDir -Recurse -Filter "mpv.exe" | Select-Object -First 1
+          if (-not $mpvExe) {
+            Write-Error "mpv.exe nao encontrado apos extrair o arquivo."
+            exit 1
+          }
+
           Copy-Item $mpvExe.FullName "bin\mpv.exe" -Force
-          Write-Host "mpv.exe copiado de $($mpvExe.FullName) ($('{0:N1}' -f ((Get-Item bin\mpv.exe).Length / 1MB)) MB)"
+          Write-Host "mpv.exe copiado com sucesso ($('{0:N1}' -f ((Get-Item bin\mpv.exe).Length / 1MB)) MB)"
 
       - name: Gerar instalador (electron-builder)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run dist
 
       - name: Anexar instalador como artifact do build
