@@ -60,7 +60,7 @@ class SkipDbService {
       const res = await fetch(queryUrl, {
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'AuraPlayer/1.1.3',
+          'User-Agent': 'AuraPlayer/1.1.4',
         },
       });
 

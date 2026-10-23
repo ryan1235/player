@@ -363,7 +363,7 @@ class MPVPlayer extends EventEmitter {
       args.push(`--screenshot-directory=${this.screenshotDir}`, '--screenshot-format=png');
     }
     if (this._embedHwndValue !== null) {
-      args.push(`--wid=${this._embedHwndValue}`);
+      args.push(`--wid=${this._embedHwndValue}`, '--title=');
     } else {
       args.push('--title=${filename} — Player');
     }

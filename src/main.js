@@ -24,8 +24,7 @@ try {
 // de novo sem fechar o anterior so foca a janela ja aberta, em vez de duplicar).
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
-  app.quit();
-  return;
+  app.exit(0);
 }
 
 // O compositor DirectComposition do Chromium normalmente cobre janelas nativas
@@ -307,6 +306,7 @@ function createWindows() {
   // type: 'toolbar' forca o estilo nativo WS_EX_TOOLWINDOW no Windows, impedindo que
   // essa janela de suporte apareca como um item fantasma/duplicado no switcher Alt+Tab.
   controlsOverlay = new BrowserWindow({
+    title: '',
     parent: mainWindow,
     frame: false,
     show: false,
