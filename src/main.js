@@ -405,19 +405,27 @@ function updateEmbeddedVideoBounds() {
 function startCursorActivityPoll() {
   if (cursorPollTimer) return;
   cursorPollTimer = setInterval(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (!player || !player.currentTarget) {
-      stopCursorActivityPoll();
-      return;
-    }
-    const isFocused = mainWindow.isFocused() || (controlsOverlay && !controlsOverlay.isDestroyed() && controlsOverlay.isFocused());
-    if (!isFocused) return;
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) return;
+    if (!controlsOverlay || controlsOverlay.isDestroyed() || !controlsOverlay.isVisible()) return;
+
     const pos = screen.getCursorScreenPoint();
+    const bounds = controlsOverlay.getBounds();
+    const inOverlay =
+      pos.x >= bounds.x &&
+      pos.x <= bounds.x + bounds.width &&
+      pos.y >= bounds.y &&
+      pos.y <= bounds.y + bounds.height;
+
+    if (!inOverlay) return;
+
     if (!lastCursorPos || pos.x !== lastCursorPos.x || pos.y !== lastCursorPos.y) {
       lastCursorPos = pos;
+      if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+        try { controlsOverlay.moveTop(); } catch {}
+      }
       broadcast('player:activity');
     }
-  }, 300);
+  }, 150);
 }
 
 function stopCursorActivityPoll() {
@@ -445,7 +453,7 @@ Menu.setApplicationMenu(null);
 app.whenReady().then(async () => {
   createWindows();
   setMainWindow(mainWindow);
-  // startCursorActivityPoll() roda sob demanda quando ha reproducao ativa
+  startCursorActivityPoll();
 
   const savedFitId = settings.get('videoFitMode');
   const initialFitMode = buildFitModes().find((m) => m.id === savedFitId) || buildFitModes()[0];
@@ -476,6 +484,7 @@ app.whenReady().then(async () => {
   skipDbService = new SkipDbService(settings);
 
   player.on('load', ({ target }) => {
+    startCursorActivityPoll();
     let initialTitle = null;
     if (subtitleService && subtitleService.activeSeries) {
       const s = subtitleService.activeSeries;
@@ -629,9 +638,18 @@ app.whenReady().then(async () => {
 
 
   mainWindow.on('enter-full-screen', () => {
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    if (userAlwaysOnTop || isPipMode) {
+      mainWindow.setAlwaysOnTop(true, isPipMode ? 'screen-saver' : 'normal');
+      if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+        controlsOverlay.setAlwaysOnTop(true, isPipMode ? 'screen-saver' : 'normal');
+      }
+    } else {
+      mainWindow.setAlwaysOnTop(false);
+      if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+        controlsOverlay.setAlwaysOnTop(false);
+      }
+    }
     if (controlsOverlay && !controlsOverlay.isDestroyed()) {
-      controlsOverlay.setAlwaysOnTop(true, 'screen-saver');
       controlsOverlay.moveTop();
     }
     broadcast('player:fullscreen-changed', true);
@@ -643,6 +661,14 @@ app.whenReady().then(async () => {
       controlsOverlay.setAlwaysOnTop(userAot, isPipMode ? 'screen-saver' : 'normal');
     }
     broadcast('player:fullscreen-changed', false);
+  });
+  mainWindow.on('blur', () => {
+    if (mainWindow.isFullScreen() && !userAlwaysOnTop && !isPipMode) {
+      mainWindow.setAlwaysOnTop(false);
+      if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+        controlsOverlay.setAlwaysOnTop(false);
+      }
+    }
   });
 
   if (settings.get('autoStartRenderer')) {
@@ -753,7 +779,6 @@ ipcMain.handle('player:volume', (_evt, vol) => player.setVolume(vol));
 ipcMain.handle('player:adjust-volume', (_evt, delta) => (player ? player.adjustVolume(delta) : Promise.resolve()));
 ipcMain.handle('updater:quit-and-install', () => quitAndInstall());
 ipcMain.handle('player:stop', () => {
-  stopCursorActivityPoll();
   return player.stop();
 });
 ipcMain.handle('player:seek-absolute', (_evt, secs) => player.seekAbsolute(secs));
@@ -936,15 +961,23 @@ ipcMain.handle('player:set-fit-mode', async (_evt, id) => {
 });
 ipcMain.handle('player:toggle-fullscreen', () => {
   const next = !mainWindow.isFullScreen();
+  mainWindow.setFullScreen(next);
   if (next) {
-    mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    if (userAlwaysOnTop || isPipMode) {
+      mainWindow.setAlwaysOnTop(true, isPipMode ? 'screen-saver' : 'normal');
+      if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+        controlsOverlay.setAlwaysOnTop(true, isPipMode ? 'screen-saver' : 'normal');
+      }
+    } else {
+      mainWindow.setAlwaysOnTop(false);
+      if (controlsOverlay && !controlsOverlay.isDestroyed()) {
+        controlsOverlay.setAlwaysOnTop(false);
+      }
+    }
     if (controlsOverlay && !controlsOverlay.isDestroyed()) {
-      controlsOverlay.setAlwaysOnTop(true, 'screen-saver');
       controlsOverlay.moveTop();
     }
-    mainWindow.setFullScreen(true);
   } else {
-    mainWindow.setFullScreen(false);
     const userAot = isPipMode || userAlwaysOnTop;
     mainWindow.setAlwaysOnTop(userAot, isPipMode ? 'screen-saver' : 'normal');
     if (controlsOverlay && !controlsOverlay.isDestroyed()) {

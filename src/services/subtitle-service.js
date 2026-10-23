@@ -555,7 +555,7 @@ class SubtitleService {
             method: 'GET',
             headers: {
               'Api-Key': apiKey,
-              'User-Agent': 'AuraPlayer v1.1.2',
+              'User-Agent': 'AuraPlayer v1.1.3',
               'Accept': 'application/json',
             },
           });
@@ -588,7 +588,7 @@ class SubtitleService {
               method: 'GET',
               headers: {
                 'Api-Key': apiKey,
-                'User-Agent': 'AuraPlayer v1.1.2',
+                'User-Agent': 'AuraPlayer v1.1.3',
                 'Accept': 'application/json',
               },
             });
@@ -614,7 +614,7 @@ class SubtitleService {
             method: 'GET',
             headers: {
               'Api-Key': apiKey,
-              'User-Agent': 'AuraPlayer v1.1.2',
+              'User-Agent': 'AuraPlayer v1.1.3',
               'Accept': 'application/json',
             },
           });
@@ -637,7 +637,7 @@ class SubtitleService {
             method: 'GET',
             headers: {
               'Api-Key': apiKey,
-              'User-Agent': 'AuraPlayer v1.1.2',
+              'User-Agent': 'AuraPlayer v1.1.3',
               'Accept': 'application/json',
             },
           });
@@ -713,7 +713,7 @@ class SubtitleService {
         method: 'POST',
         headers: {
           'Api-Key': apiKey,
-          'User-Agent': 'AuraPlayer v1.1.2',
+          'User-Agent': 'AuraPlayer v1.1.3',
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
