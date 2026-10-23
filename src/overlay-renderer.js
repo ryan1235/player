@@ -7,9 +7,46 @@ const btnPlayPause = document.getElementById('btn-playpause');
 const iconPlay = document.getElementById('icon-play');
 const iconPause = document.getElementById('icon-pause');
 const btnMute = document.getElementById('btn-mute');
-const iconVolOn = document.getElementById('icon-vol-on');
-const iconVolOff = document.getElementById('icon-vol-off');
+const iconVolHigh = document.getElementById('icon-vol-high');
+const iconVolLow = document.getElementById('icon-vol-low');
+const iconVolMute = document.getElementById('icon-vol-mute');
 const volumeEl = document.getElementById('volume');
+const volumeBadge = document.getElementById('volume-badge');
+const ovVolume = document.getElementById('ov-volume');
+
+function updatePlayPauseIcon(paused) {
+  if (iconPlay) iconPlay.hidden = !paused;
+  if (iconPause) iconPause.hidden = paused;
+  if (btnPlayPause) {
+    btnPlayPause.title = paused ? 'Reproduzir (Espaço)' : 'Pausar (Espaço)';
+    btnPlayPause.setAttribute('aria-label', paused ? 'Reproduzir' : 'Pausar');
+  }
+}
+
+function updateVolumeUI(vol, isMuted) {
+  const v = Math.round(Math.max(0, vol ?? 100));
+  if (volumeBadge) {
+    volumeBadge.textContent = isMuted ? 'Mudo' : `${v}%`;
+  }
+  if (volumeEl && document.activeElement !== volumeEl) {
+    volumeEl.value = v;
+  }
+  if (iconVolHigh && iconVolLow && iconVolMute) {
+    if (isMuted || v === 0) {
+      iconVolHigh.hidden = true;
+      iconVolLow.hidden = true;
+      iconVolMute.hidden = false;
+    } else if (v <= 50) {
+      iconVolHigh.hidden = true;
+      iconVolLow.hidden = false;
+      iconVolMute.hidden = true;
+    } else {
+      iconVolHigh.hidden = false;
+      iconVolLow.hidden = true;
+      iconVolMute.hidden = true;
+    }
+  }
+}
 const qualityContainer = document.getElementById('ov-quality-container');
 const btnQuality = document.getElementById('ov-btn-quality');
 const qualityMenu = document.getElementById('ov-quality-menu');
@@ -233,14 +270,30 @@ function showLiveToast({ type, message } = {}) {
 window.api.onLiveEvent((info) => showLiveToast(info));
 
 // --- Play/pause, transporte, volume, legenda, aspecto, fullscreen ---
-btnPlayPause.addEventListener('click', withErr(() => window.api.togglePlayPause()));
+btnPlayPause.addEventListener('click', () => {
+  lastPaused = !lastPaused;
+  updatePlayPauseIcon(lastPaused);
+  window.api.togglePlayPause().catch(() => {});
+});
 document.getElementById('btn-back10').addEventListener('click', withErr(() => window.api.seek(-10)));
 document.getElementById('btn-fwd10').addEventListener('click', withErr(() => window.api.seek(10)));
 document.getElementById('btn-stop').addEventListener('click', withErr(() => window.api.stop()));
 btnMute.addEventListener('click', withErr(() => window.api.toggleMute()));
 volumeEl.addEventListener('input', (e) => {
-  window.api.setVolume(Number(e.target.value)).catch(() => {});
+  const val = Number(e.target.value);
+  updateVolumeUI(val, false);
+  window.api.setVolume(val).catch(() => {});
 });
+if (ovVolume) {
+  ovVolume.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const step = e.deltaY < 0 ? 5 : -5;
+    const current = Number(volumeEl.value) || 0;
+    const next = Math.max(0, Math.min(150, current + step));
+    updateVolumeUI(next, false);
+    window.api.setVolume(next).catch(() => {});
+  }, { passive: false });
+}
 
 document.getElementById('btn-screenshot').addEventListener('click', async () => {
   try {
@@ -2279,6 +2332,8 @@ window.api.onPlayerStatus((info) => {
     } else {
       bufferingEl.hidden = true;
     }
+    lastPaused = true;
+    updatePlayPauseIcon(true);
     return;
   }
 
@@ -2350,20 +2405,15 @@ window.api.onPlayerStatus((info) => {
 
   const wasPaused = lastPaused;
   lastPaused = !!info.paused;
-  iconPlay.hidden = !lastPaused;
-  iconPause.hidden = lastPaused;
-  btnPlayPause.title = lastPaused ? 'Play (Espaço)' : 'Pause (Espaço)';
+  updatePlayPauseIcon(lastPaused);
   if (lastPaused) {
     clearIdleTimer();
   } else if (wasPaused) {
     armIdleTimer();
   }
 
-  iconVolOn.hidden = !!info.mute;
-  iconVolOff.hidden = !info.mute;
-  if (!scrubbing && document.activeElement !== volumeEl) {
-    volumeEl.value = info.volume ?? volumeEl.value;
-  }
+  const curVol = typeof info.volume === 'number' ? info.volume : (Number(volumeEl.value) || 100);
+  updateVolumeUI(curVol, !!info.mute);
 });
 
 // --- Mostrar/esconder controles automaticamente ---

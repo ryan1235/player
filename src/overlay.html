@@ -36,9 +36,9 @@
           <button id="btn-back10" class="ov-btn" aria-label="Voltar 10 segundos" title="Voltar 10s (←)">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M11 6 5 12l6 6M5 12h9a5 5 0 1 1 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <button id="btn-playpause" class="ov-btn ov-btn-accent ov-btn-lg" aria-label="Reproduzir ou pausar" title="Play/Pause (Espaço)">
-            <svg id="icon-play" viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M8 5v14l11-7-11-7Z" fill="currentColor"/></svg>
-            <svg id="icon-pause" viewBox="0 0 24 24" width="20" height="20" fill="none" hidden><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+          <button id="btn-playpause" class="ov-btn ov-btn-accent" aria-label="Reproduzir ou pausar" title="Play/Pause (Espaço)">
+            <svg id="icon-play" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z"/></svg>
+            <svg id="icon-pause" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" hidden><rect x="6.5" y="4" width="4" height="16" rx="1.5"/><rect x="13.5" y="4" width="4" height="16" rx="1.5"/></svg>
           </button>
           <button id="btn-fwd10" class="ov-btn" aria-label="Avançar 10 segundos" title="Avançar 10s (→)">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M13 6l6 6-6 6M19 12h-9a5 5 0 1 0 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -49,12 +49,14 @@
 
           <div class="ov-volume" id="ov-volume">
             <button id="btn-mute" class="ov-btn" aria-label="Ativar ou desativar mudo" title="Mudo (M)">
-              <svg id="icon-vol-on" viewBox="0 0 24 24" width="17" height="17" fill="none"><path d="M4 10v4h4l5 4V6L8 10H4Z" fill="currentColor"/><path d="M17 9a4 4 0 0 1 0 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <svg id="icon-vol-off" viewBox="0 0 24 24" width="17" height="17" fill="none" hidden><path d="M4 10v4h4l5 4V6L8 10H4Z" fill="currentColor"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <svg id="icon-vol-high" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+              <svg id="icon-vol-low" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" hidden><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+              <svg id="icon-vol-mute" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" hidden><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27l4.73 4.73H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
             </button>
             <div class="ov-volume-slider">
               <input id="volume" type="range" min="0" max="150" value="100" aria-label="Volume" />
             </div>
+            <span id="volume-badge" class="ov-volume-badge">100%</span>
           </div>
 
           <div class="ov-time" id="ov-time">

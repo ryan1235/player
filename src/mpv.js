@@ -5,7 +5,7 @@ const path = require('path');
 const EventEmitter = require('events');
 
 const { app } = require('electron');
-const { findChildHwndByPid, positionEmbeddedWindow, listChildWindows, hideFromAltTab } = require('./native-embed');
+const { findChildHwndByPid, positionEmbeddedWindow, listChildWindows } = require('./native-embed');
 const logger = require('./services/logger');
 const LiveDetector = require('./live/live-detector');
 const NetworkMonitor = require('./live/network-monitor');
@@ -428,7 +428,6 @@ class MPVPlayer extends EventEmitter {
       const hwnd = findChildHwndByPid(this._embedHwndValue, pid);
       if (hwnd) {
         this._embeddedChildHwnd = hwnd;
-        hideFromAltTab(hwnd, true);
         if (this._pendingBounds) this.positionEmbedded(...this._pendingBounds);
         return;
       }
@@ -446,7 +445,6 @@ class MPVPlayer extends EventEmitter {
       const hwnd = findChildHwndByPid(this._embedHwndValue, pid);
       if (hwnd) {
         this._embeddedChildHwnd = hwnd;
-        hideFromAltTab(hwnd, true);
         if (this._pendingBounds) this.positionEmbedded(...this._pendingBounds);
         logger.mpv('[embed] janela encontrada apos espera adicional.');
         return;

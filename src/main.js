@@ -8,7 +8,6 @@ const WatchHistory = require('./watch-history');
 const Settings = require('./settings');
 const Library = require('./library');
 const { checkForUpdates, setMainWindow, quitAndInstall } = require('./auto-updater');
-const { hideFromAltTab } = require('./native-embed');
 const { SubtitleService, isGarbageTitle } = require('./services/subtitle-service');
 const { SkipDbService } = require('./services/skipdb-service');
 const { PosterService } = require('./services/poster-service');
@@ -309,7 +308,6 @@ function createWindows() {
   // essa janela de suporte apareca como um item fantasma/duplicado no switcher Alt+Tab.
   controlsOverlay = new BrowserWindow({
     parent: mainWindow,
-    type: 'toolbar',
     frame: false,
     show: false,
     skipTaskbar: true,
@@ -327,7 +325,6 @@ function createWindows() {
   });
   controlsOverlay.setMenuBarVisibility(false);
   controlsOverlay.loadFile(path.join(__dirname, 'overlay.html'));
-  hideFromAltTab(getHwndBuffer(controlsOverlay), false);
 
   // So reagimos a 'move' aqui (a posicao muda mas o tamanho/layout do video nao).
   // Em 'resize' o layout interno (flex) ainda nao recalculou, entao usar o retangulo
