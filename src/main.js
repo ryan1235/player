@@ -7,7 +7,8 @@ const DlnaRenderer = require('./dlna-renderer');
 const WatchHistory = require('./watch-history');
 const Settings = require('./settings');
 const Library = require('./library');
-const { checkForUpdates, setMainWindow } = require('./auto-updater');
+const { checkForUpdates, setMainWindow, quitAndInstall } = require('./auto-updater');
+const { hideFromAltTab } = require('./native-embed');
 const { SubtitleService, isGarbageTitle } = require('./services/subtitle-service');
 const { SkipDbService } = require('./services/skipdb-service');
 const { PosterService } = require('./services/poster-service');
@@ -244,35 +245,71 @@ function buildFitModes() {
 }
 
 function createWindows() {
-  mainWindow = new BrowserWindow({
+  const savedBounds = settings.get('windowBounds');
+  const savedMaximized = settings.get('windowMaximized');
+
+  const winOpts = {
     width: 1040,
     height: 720,
     minWidth: 760,
     minHeight: 520,
     backgroundColor: '#0f1115',
     autoHideMenuBar: true,
-    show: true,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
-  });
+  };
+
+  if (savedBounds && typeof savedBounds.width === 'number' && typeof savedBounds.height === 'number') {
+    try {
+      const displays = screen.getAllDisplays();
+      const isVisibleOnAnyDisplay = displays.some((d) => {
+        const b = d.bounds;
+        return (
+          savedBounds.x >= b.x - 20 &&
+          savedBounds.x < b.x + b.width - 50 &&
+          savedBounds.y >= b.y - 20 &&
+          savedBounds.y < b.y + b.height - 50
+        );
+      });
+      if (isVisibleOnAnyDisplay) {
+        winOpts.x = savedBounds.x;
+        winOpts.y = savedBounds.y;
+        winOpts.width = Math.max(760, savedBounds.width);
+        winOpts.height = Math.max(520, savedBounds.height);
+      }
+    } catch {}
+  }
+
+  mainWindow = new BrowserWindow(winOpts);
+  if (savedMaximized) {
+    mainWindow.maximize();
+  }
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
   });
 
+  mainWindow.on('close', () => {
+    try {
+      const isMax = mainWindow.isMaximized();
+      settings.set('windowMaximized', isMax);
+      if (!isMax && !mainWindow.isFullScreen() && !isPipMode) {
+        settings.set('windowBounds', mainWindow.getBounds());
+      }
+    } catch {}
+  });
+
   // Janela transparente sobreposta a area de video, so com os controles (HTML).
-  // Fica sempre totalmente interativa (nao alterna ignoreMouseEvents em tempo
-  // real): alternar isso a cada movimento do mouse e um recurso do Windows
-  // conhecido por travar a entrega de eventos depois de algumas trocas, o que
-  // deixava o overlay preso escondido sem responder a mais nada. Como o mpv
-  // roda com --osc=no e a janela dele e focusable:false, nao ha nenhuma
-  // interacao nativa do mpv que dependa de cliques atravessando o overlay.
+  // type: 'toolbar' forca o estilo nativo WS_EX_TOOLWINDOW no Windows, impedindo que
+  // essa janela de suporte apareca como um item fantasma/duplicado no switcher Alt+Tab.
   controlsOverlay = new BrowserWindow({
     parent: mainWindow,
+    type: 'toolbar',
     frame: false,
     show: false,
     skipTaskbar: true,
@@ -290,6 +327,7 @@ function createWindows() {
   });
   controlsOverlay.setMenuBarVisibility(false);
   controlsOverlay.loadFile(path.join(__dirname, 'overlay.html'));
+  hideFromAltTab(getHwndBuffer(controlsOverlay), false);
 
   // So reagimos a 'move' aqui (a posicao muda mas o tamanho/layout do video nao).
   // Em 'resize' o layout interno (flex) ainda nao recalculou, entao usar o retangulo
@@ -371,6 +409,10 @@ function startCursorActivityPoll() {
   if (cursorPollTimer) return;
   cursorPollTimer = setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!player || !player.currentTarget) {
+      stopCursorActivityPoll();
+      return;
+    }
     const isFocused = mainWindow.isFocused() || (controlsOverlay && !controlsOverlay.isDestroyed() && controlsOverlay.isFocused());
     if (!isFocused) return;
     const pos = screen.getCursorScreenPoint();
@@ -379,6 +421,13 @@ function startCursorActivityPoll() {
       broadcast('player:activity');
     }
   }, 300);
+}
+
+function stopCursorActivityPoll() {
+  if (cursorPollTimer) {
+    clearInterval(cursorPollTimer);
+    cursorPollTimer = null;
+  }
 }
 
 // O overlay de controles e a janela principal sao processos de renderer
@@ -399,7 +448,7 @@ Menu.setApplicationMenu(null);
 app.whenReady().then(async () => {
   createWindows();
   setMainWindow(mainWindow);
-  startCursorActivityPoll();
+  // startCursorActivityPoll() roda sob demanda quando ha reproducao ativa
 
   const savedFitId = settings.get('videoFitMode');
   const initialFitMode = buildFitModes().find((m) => m.id === savedFitId) || buildFitModes()[0];
@@ -671,8 +720,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  stopCursorActivityPoll();
   if (castSupervisorTimer) clearInterval(castSupervisorTimer);
   if (updateCheckTimer) clearInterval(updateCheckTimer);
+  if (watchHistory && typeof watchHistory.flushSync === 'function') {
+    watchHistory.flushSync();
+  }
   player.quit();
   renderer.stop().catch(() => {});
 });
@@ -687,6 +740,7 @@ ipcMain.handle('pick-file', async () => {
 });
 
 ipcMain.handle('player:load', async (_evt, target) => {
+  startCursorActivityPoll();
   await player.loadFile(target);
   return true;
 });
@@ -699,7 +753,12 @@ ipcMain.handle('player:toggle-play', async () => {
 });
 ipcMain.handle('player:seek', (_evt, secs) => player.seek(secs));
 ipcMain.handle('player:volume', (_evt, vol) => player.setVolume(vol));
-ipcMain.handle('player:stop', () => player.stop());
+ipcMain.handle('player:adjust-volume', (_evt, delta) => (player ? player.adjustVolume(delta) : Promise.resolve()));
+ipcMain.handle('updater:quit-and-install', () => quitAndInstall());
+ipcMain.handle('player:stop', () => {
+  stopCursorActivityPoll();
+  return player.stop();
+});
 ipcMain.handle('player:seek-absolute', (_evt, secs) => player.seekAbsolute(secs));
 ipcMain.handle('player:toggle-mute', () => player.toggleMute());
 ipcMain.handle('player:toggle-subtitles', () => player.toggleSubtitles());

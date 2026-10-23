@@ -14,4 +14,10 @@ function atomicWriteFileSync(filePath, contents) {
   fs.renameSync(tmpPath, filePath);
 }
 
-module.exports = { atomicWriteFileSync };
+async function atomicWriteFile(filePath, contents) {
+  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  await fs.promises.writeFile(tmpPath, contents);
+  await fs.promises.rename(tmpPath, filePath);
+}
+
+module.exports = { atomicWriteFileSync, atomicWriteFile };

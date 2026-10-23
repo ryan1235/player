@@ -17,14 +17,6 @@ const AVTRANSPORT_TYPE = 'urn:schemas-upnp-org:service:AVTransport:1';
 const RENDERINGCONTROL_TYPE = 'urn:schemas-upnp-org:service:RenderingControl:1';
 const CONNECTIONMANAGER_TYPE = 'urn:schemas-upnp-org:service:ConnectionManager:1';
 
-const DLNA_LOG_FILE = path.join(__dirname, '..', 'dlna-debug.log');
-function logDlna(text) {
-  const timestamp = new Date().toISOString();
-  const entry = `[${timestamp}] ${text}\n`;
-  try {
-    fs.appendFileSync(DLNA_LOG_FILE, entry, 'utf8');
-  } catch {}
-}
 
 function escapeXml(str) {
   return String(str).replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
@@ -497,7 +489,6 @@ class DlnaRenderer extends EventEmitter {
     if (soapAction) console.log(`   SOAPAction: ${soapAction}`);
     console.log(`------------------------------------------------------------`);
     logger.network(`[dlna-http] ${req.method} ${req.url} de ${remote} (UA: ${userAgent})`);
-    logDlna(`📡 [DLNA-HTTP] ${req.method} ${req.url} | Remote: ${remote} | User-Agent: ${userAgent} | SOAPAction: ${soapAction}`);
 
     const sendXml = (status, xml) => {
       const buf = Buffer.from(xml, 'utf8');

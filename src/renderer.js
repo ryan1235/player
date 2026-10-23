@@ -235,6 +235,18 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowRight':
       window.api.seek(10).catch(() => {});
       break;
+    case 'ArrowUp':
+      e.preventDefault();
+      window.api.adjustVolume(5).catch(() => {});
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      window.api.adjustVolume(-5).catch(() => {});
+      break;
+    case 'c':
+    case 'C':
+      window.api.toggleSubtitles().catch(() => {});
+      break;
     case 'm':
     case 'M':
       window.api.toggleMute().catch(() => {});
@@ -1057,7 +1069,18 @@ window.api.onUpdateProgress(({ percent }) => {
   updateStatusEl.textContent = t('update.downloading', { percent: Math.round(percent || 0) });
 });
 window.api.onUpdateReady(({ latestVersion }) => {
-  updateStatusEl.textContent = t('update.readyToInstall', { version: latestVersion });
+  updateStatusEl.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = t('update.readyToInstall', { version: latestVersion }) + ' ';
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-primary';
+  btn.style.marginLeft = '10px';
+  btn.style.padding = '4px 12px';
+  btn.style.fontSize = '12px';
+  btn.textContent = 'Reiniciar agora';
+  btn.addEventListener('click', () => window.api.quitAndInstall());
+  updateStatusEl.appendChild(span);
+  updateStatusEl.appendChild(btn);
 });
 window.api.onUpdateError(({ message }) => {
   updateStatusEl.textContent = t('update.error', { message });

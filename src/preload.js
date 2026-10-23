@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   seek: (secs) => ipcRenderer.invoke('player:seek', secs),
   seekAbsolute: (secs) => ipcRenderer.invoke('player:seek-absolute', secs),
   setVolume: (vol) => ipcRenderer.invoke('player:volume', vol),
+  adjustVolume: (delta) => ipcRenderer.invoke('player:adjust-volume', delta),
   stop: () => ipcRenderer.invoke('player:stop'),
   discoverDlna: () => ipcRenderer.invoke('dlna:discover'),
   browseDlna: (server, objectId) => ipcRenderer.invoke('dlna:browse', server, objectId),
@@ -140,5 +141,6 @@ contextBridge.exposeInMainWorld('api', {
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_evt, info) => cb(info)),
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_evt, info) => cb(info)),
   onUpdateError: (cb) => ipcRenderer.on('update:error', (_evt, info) => cb(info)),
+  quitAndInstall: () => ipcRenderer.invoke('updater:quit-and-install'),
   getVersionInfo: () => ipcRenderer.invoke('app:get-version-info'),
 });

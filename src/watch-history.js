@@ -1,10 +1,13 @@
 const fs = require('fs');
-const { atomicWriteFileSync } = require('./services/atomic-write');
+const { atomicWriteFileSync, atomicWriteFile } = require('./services/atomic-write');
 
 class WatchHistory {
   constructor(filePath) {
     this.filePath = filePath;
     this.data = this._load();
+    this._persistTimer = null;
+    this._isPersisting = false;
+    this._pendingPersist = false;
   }
 
   _load() {
@@ -15,12 +18,43 @@ class WatchHistory {
     }
   }
 
+  // Gravação assíncrona com debounce (1.5s): evita que o autosave de 8s durante a
+  // reprodução bloqueie a thread principal do Electron com escrita síncrona em disco.
   _persist() {
+    if (this._persistTimer) return;
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null;
+      this._flushAsync().catch(() => {});
+    }, 1500);
+  }
+
+  async _flushAsync() {
+    if (this._isPersisting) {
+      this._pendingPersist = true;
+      return;
+    }
+    this._isPersisting = true;
+    try {
+      await atomicWriteFile(this.filePath, JSON.stringify(this.data));
+    } catch {
+      // segue sem persistir se falhar
+    } finally {
+      this._isPersisting = false;
+      if (this._pendingPersist) {
+        this._pendingPersist = false;
+        this._flushAsync().catch(() => {});
+      }
+    }
+  }
+
+  flushSync() {
+    if (this._persistTimer) {
+      clearTimeout(this._persistTimer);
+      this._persistTimer = null;
+    }
     try {
       atomicWriteFileSync(this.filePath, JSON.stringify(this.data));
-    } catch {
-      // nao foi possivel gravar o historico, segue sem persistir
-    }
+    } catch {}
   }
 
   get(key) {

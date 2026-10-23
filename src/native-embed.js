@@ -20,7 +20,15 @@ const GetWindowThreadProcessId = user32.func(
 const SetWindowPos = user32.func(
   'bool __stdcall SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, uint32_t uFlags)'
 );
+const GetWindowLongW = user32.func(
+  'int32_t __stdcall GetWindowLongW(HWND hWnd, int nIndex)'
+);
+const SetWindowLongW = user32.func(
+  'int32_t __stdcall SetWindowLongW(HWND hWnd, int nIndex, int32_t dwNewLong)'
+);
 
+const SWP_NOSIZE = 0x0001;
+const SWP_NOMOVE = 0x0002;
 const SWP_NOZORDER = 0x0004;
 const SWP_NOACTIVATE = 0x0010;
 const SWP_SHOWWINDOW = 0x0040;
@@ -30,6 +38,35 @@ const SWP_HIDEWINDOW = 0x0080;
 // depois de alt-tab, ver main.js forceRepaint()) pode ser otimizado pelo SO
 // e nao redesenhar nada de verdade.
 const SWP_FRAMECHANGED = 0x0020;
+
+const GWL_STYLE = -16;
+const GWL_EXSTYLE = -20;
+const WS_CHILD = 0x40000000;
+const WS_POPUP = 0x80000000;
+const WS_EX_TOOLWINDOW = 0x00000080;
+const WS_EX_APPWINDOW = 0x00040000;
+
+// Remove uma janela do switcher Alt+Tab do Windows.
+// Aplica WS_EX_TOOLWINDOW e remove WS_EX_APPWINDOW, garantindo que o DWM
+// trate a janela como ferramenta auxiliar sem criar thumbnail fantasma.
+function hideFromAltTab(hwnd, asChild = false) {
+  if (!hwnd) return;
+  try {
+    const currentEx = GetWindowLongW(hwnd, GWL_EXSTYLE);
+    const newEx = (currentEx | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
+    if (newEx !== currentEx) {
+      SetWindowLongW(hwnd, GWL_EXSTYLE, newEx);
+    }
+    if (asChild) {
+      const currentStyle = GetWindowLongW(hwnd, GWL_STYLE);
+      const newStyle = (currentStyle | WS_CHILD) & ~WS_POPUP;
+      if (newStyle !== currentStyle) {
+        SetWindowLongW(hwnd, GWL_STYLE, newStyle);
+      }
+    }
+    SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+  } catch {}
+}
 
 // Acha, entre os filhos diretos de parentHandle, a janela que pertence ao
 // processo `pid` — e assim que descobrimos o hwnd que o mpv criou ao ser
@@ -78,4 +115,4 @@ function positionEmbeddedWindow(hwnd, x, y, width, height) {
   SetWindowPos(hwnd, 0, Math.round(x), Math.round(y), Math.max(0, Math.round(width)), Math.max(0, Math.round(height)), flags);
 }
 
-module.exports = { findChildHwndByPid, positionEmbeddedWindow, listChildWindows };
+module.exports = { findChildHwndByPid, positionEmbeddedWindow, listChildWindows, hideFromAltTab };

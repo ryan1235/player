@@ -82,6 +82,43 @@ class Library {
     return this.index;
   }
 
+  async _runThumbMpv(videoPath, tmpDir, startSec) {
+    return new Promise((resolve) => {
+      let proc;
+      try {
+        proc = spawn(
+          resolveMpvBinary(),
+          [
+            videoPath,
+            '--no-config',
+            '--vo=image',
+            `--vo-image-outdir=${tmpDir}`,
+            '--vo-image-format=jpg',
+            '--frames=1',
+            `--start=${startSec}`,
+            '--really-quiet',
+            '--no-terminal',
+          ],
+          { stdio: 'ignore' }
+        );
+      } catch {
+        resolve(false);
+        return;
+      }
+      const killTimer = setTimeout(() => {
+        try { proc.kill(); } catch {}
+      }, THUMB_TIMEOUT_MS);
+      proc.on('exit', () => {
+        clearTimeout(killTimer);
+        resolve(true);
+      });
+      proc.on('error', () => {
+        clearTimeout(killTimer);
+        resolve(false);
+      });
+    });
+  }
+
   async _generateThumbnail(videoPath) {
     const outFinal = path.join(this.thumbnailsDir, hashPath(videoPath) + '.jpg');
     let tmpDir;
@@ -91,45 +128,21 @@ class Library {
       return null;
     }
     try {
-      await new Promise((resolve) => {
-        let proc;
-        try {
-          proc = spawn(
-            resolveMpvBinary(),
-            [
-              videoPath,
-              '--no-config',
-              '--vo=image',
-              `--vo-image-outdir=${tmpDir}`,
-              '--vo-image-format=jpg',
-              '--frames=1',
-              `--start=${THUMB_SEEK_SECONDS}`,
-              '--really-quiet',
-              '--no-terminal',
-            ],
-            { stdio: 'ignore' }
-          );
-        } catch {
-          resolve();
-          return;
-        }
-        const killTimer = setTimeout(() => {
-          try {
-            proc.kill();
-          } catch {
-            // processo ja pode ter terminado sozinho
-          }
-        }, THUMB_TIMEOUT_MS);
-        proc.on('exit', () => {
-          clearTimeout(killTimer);
-          resolve();
-        });
-        proc.on('error', () => {
-          clearTimeout(killTimer);
-          resolve();
-        });
-      });
-      const produced = fs.readdirSync(tmpDir).find((f) => /\.jpe?g$/i.test(f));
+      // 1ª tentativa: no ponto padrão (10 segundos)
+      await this._runThumbMpv(videoPath, tmpDir, THUMB_SEEK_SECONDS);
+      let produced = fs.readdirSync(tmpDir).find((f) => /\.jpe?g$/i.test(f));
+
+      // Fallback para vídeos curtos (<10s) ou vinhetas: tenta no segundo 1
+      if (!produced) {
+        await this._runThumbMpv(videoPath, tmpDir, 1);
+        produced = fs.readdirSync(tmpDir).find((f) => /\.jpe?g$/i.test(f));
+      }
+      // Segundo fallback: tenta exatamente no frame inicial 0
+      if (!produced) {
+        await this._runThumbMpv(videoPath, tmpDir, 0);
+        produced = fs.readdirSync(tmpDir).find((f) => /\.jpe?g$/i.test(f));
+      }
+
       if (!produced) return null;
       fs.renameSync(path.join(tmpDir, produced), outFinal);
       return outFinal;
@@ -168,6 +181,12 @@ class Library {
         }
         items[i] = { ...file, thumbnail };
         doneCount++;
+        // Persistência incremental a cada 10 itens para não perder o progresso caso o app feche
+        if (doneCount % 10 === 0) {
+          const partialItems = items.filter(Boolean);
+          this.index = { folder, scannedAt: Date.now(), items: partialItems };
+          this._persist();
+        }
         if (onProgress) onProgress({ done: doneCount, total: found.length, currentName: file.name });
       }
     };

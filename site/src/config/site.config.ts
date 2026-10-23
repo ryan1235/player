@@ -7,7 +7,7 @@
 
 export const siteConfig = {
   appName: 'Aura Player',
-  version: '1.1.0', // extraido de package.json (player/package.json)
+  version: '1.1.1', // extraido de package.json (player/package.json)
   tagline: {
     pt: 'Sua mídia. Do seu jeito.',
     en: 'Your media. Your way.',

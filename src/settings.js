@@ -33,6 +33,9 @@ const DEFAULTS = {
   // Pular Abertura (SkipDB)
   skipIntroEnabled: true,
   skipIntroAuto: false,
+  // Janela e exibição
+  windowBounds: null,
+  windowMaximized: false,
 };
 
 class Settings {

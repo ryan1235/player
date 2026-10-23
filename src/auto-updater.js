@@ -76,4 +76,8 @@ async function checkForUpdates() {
   }
 }
 
-module.exports = { checkForUpdates, setMainWindow };
+function quitAndInstall() {
+  autoUpdater.quitAndInstall();
+}
+
+module.exports = { checkForUpdates, setMainWindow, quitAndInstall };
